@@ -6,26 +6,33 @@ Please read NestJS documentation for more information.
 ###### Tech Stack ######
 
 **Framework:**
+
 *  NestJS
 
 **Databases:**
+
 *  Mysql (TypeORM)
 *  Elasticsearch
 
 **Payment Gateways:**
+
 *  Stripe (for Stripe and Apple Pay)
 *  PayPal
 
 **Push Notifications:**
+
 *  OneSignal
 
 **SMS Service:**
+
 *  Twillio
 
 **Email Sender Service:**
+
 *  SendGrid
 
 **Geocoder Service:**
+
 *  Google Maps
 
 ## Installation

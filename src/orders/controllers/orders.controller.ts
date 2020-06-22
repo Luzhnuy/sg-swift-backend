@@ -1,7 +1,7 @@
 import {
   Body,
   ConflictException,
-  Controller,
+  Controller, Delete,
   Get,
   Header,
   HttpService,
@@ -38,7 +38,6 @@ import { OrderMetadataEntity } from './entities/order-metadata.entity';
 import { HistoryOrder } from './data/history-order';
 import { DriversService } from '../drivers/services/drivers.service';
 import { DriverProfileEntity } from '../drivers/entities/driver-profile.entity';
-import { SendGridService } from '@anchan828/nest-sendgrid';
 import { SettingsService } from '../settings/services/settings.service';
 import { MerchantsService } from '../merchants/services/merchants.service';
 import { UsersService } from '../cms/users/services/users.service';
@@ -49,6 +48,9 @@ import { OrdersEmailSenderService } from './services/orders-email-sender.service
 import { OrdersOldService } from './services/orders-old.service';
 import { OrderPrepareRequestData } from './data/misc';
 import { OrdersReportsService } from './services/orders-reports.service';
+import { SchedulerService } from '../scheduler/services/scheduler.service';
+import { OrdersScheduledTasksKeys } from './data/scheduled-tasks-keys';
+import { PaymentsStripeService } from '../payments/services/payments-stripe.service';
 
 interface SearchQuery {
   customerId?: string | number;
@@ -77,7 +79,6 @@ export class OrdersController extends CrudController {
     private oldService: OrdersOldService,
     private driversService: DriversService,
     private readonly httpService: HttpService,
-    private readonly sendGrid: SendGridService,
     private settingsService: SettingsService,
     private merchantsService: MerchantsService,
     private customersService: CustomersService,
@@ -86,6 +87,8 @@ export class OrdersController extends CrudController {
     private pushNotificationService: OrdersPushNotificationService,
     private emailSenderService: OrdersEmailSenderService,
     private reportsService: OrdersReportsService,
+    private schedulerService: SchedulerService,
+    private paymentsStripeService: PaymentsStripeService,
   ) {
     super(rolesAndPermissions, contentPermissionsHelper);
   }
@@ -96,7 +99,8 @@ export class OrdersController extends CrudController {
       order: { id: 'DESC' },
     });
     this.pushNotificationService
-      .sendNotificationToCustomers(order);
+      // .sendNotificationToCustomers(order);
+      .sendNotificationToDrivers(order.id);
     return true;
   }
 
@@ -156,6 +160,13 @@ export class OrdersController extends CrudController {
     };
   }
 
+  @Get('make-charge/:orderId')
+  async makeBookingCharge(@User() user: UserEntity, @Param('orderId') orderId: number) {
+    const order = await this.repository.findOne({ id: orderId });
+    await this.ordersService.bookOrder(order);
+    return this.repository.save(order);
+  }
+
   @Post('')
   @UseGuards(ContentPermissionsGuard(isOwner => ContentPermissionsKeys[ContentPermissionsKeys.ContentAdd]))
   async createContentEntity(@Body() entity: OrderEntity, @User() user: UserEntity) {
@@ -198,9 +209,6 @@ export class OrdersController extends CrudController {
         } else {
           order.customer.metadata.credit += .5;
           await this.customersService.saveMetadata(order.customer.metadata);
-          if (order.customer.metadata.credit >= 5) {
-            this.pushNotificationService.sendNotificationToCustomerCreditReached(order.customer.user);
-          }
         }
       }
       if (order.customer.metadata.refUserId && !order.customer.metadata.refPaid) {
@@ -268,6 +276,8 @@ export class OrdersController extends CrudController {
     const customer = await this.customersService.get(customerWhere);
     if (!customer) {
       throw new UnauthorizedException('Customer hasn\'t payment card');
+    } else if (customer.metadata.debtAmount) {
+      throw new UnprocessableEntityException('User already has debt. Please, pay Your Debt!');
     }
     entity.customer = customer;
     entity.customerId = customer.id;
@@ -388,7 +398,6 @@ export class OrdersController extends CrudController {
       } else if (status === OrderStatus.Cancelled) {
         return await this.ordersService.updateOrderStatus(order, status,
           undefined, undefined, undefined,
-          // cancellationReason, false, source === OrderSource.Customer);
           cancellationReason, false,
           order.customer ? order.customer.userId === user.id : false);
       } else if (status === OrderStatus.Received) {
@@ -409,7 +418,73 @@ export class OrdersController extends CrudController {
     return { success: true };
   }
 
+  @Get(':id/debt')
+  @UseGuards(ContentEntityNotFoundGuard)
+  async getOrderDebt(
+    @User() user: UserEntity,
+    @Param('id') orderId: string,
+  ) {
+    const tasks = await this.schedulerService
+      .getTasksByKey(OrdersScheduledTasksKeys.ChargeDebt);
+    return tasks.find(task => task.data === orderId) || {};
+  }
+
+  @Post(':id/debt')
+  @UseGuards(ContentEntityNotFoundGuard)
+  async payOrderDebt(
+    @User() user: UserEntity,
+    @ContentEntityParam() order: OrderEntity,
+    @Param('id') orderId: string,
+  ) {
+    const tasks = await this.schedulerService
+      .getTasksByKey(OrdersScheduledTasksKeys.ChargeDebt);
+    for (const task of tasks) {
+      if (task.data === orderId) {
+        return await this.schedulerService.runTask(task);
+      }
+    }
+    // if task wasn't found try to pay debt without task
+    if (!order.customer) {
+      throw new NotFoundException('Customer not found');
+    }
+    const card = await this.paymentsStripeService
+      .getCardByUser(order.customer.userId);
+    if (!card) {
+      throw new UnprocessableEntityException('No credit card found');
+    }
+    await this.ordersService.payOrderDebt(order, card);
+    return { success: true };
+  }
+
+  @Delete(':id/debt')
+  // TODO important GUARD
+  @UseGuards(ContentEntityNotFoundGuard)
+  async clearOrderDebt(
+    @User() user: UserEntity,
+    @Param('id') orderId: string,
+    @ContentEntityParam() order: OrderEntity,
+  ) {
+    const customer = await this.customersService.get({ id: order.customerId });
+    if (customer) {
+      customer.metadata.debtAmount -= order.metadata.debtAmount;
+      await this.customersService.saveMetadata(customer.metadata);
+    }
+    order.metadata.debtAmount = null;
+    await this.repository.save(order);
+    const tasks = await this.schedulerService
+      .getTasksByKey(OrdersScheduledTasksKeys.ChargeDebt);
+    for (const task of tasks) {
+      if (task.data === orderId) {
+        return await this.schedulerService.removeTask(task);
+      }
+    }
+    return { success: true };
+  }
+
+  ////////////////////
   // OLD Functionality
+  ////////////////////
+
   @Post('book-delivery')
   async delivery(
     @Body() data: GetswiftDelivery,
@@ -471,6 +546,10 @@ export class OrdersController extends CrudController {
         .get({ clientId: order.metadata.clientId } );
       if (customer) {
         order.customerId = customer.id;
+        await this.repository.save({
+          id: order.id,
+          customerId: order.customerId,
+        });
       }
     }
     if (data.paymentmethod) {

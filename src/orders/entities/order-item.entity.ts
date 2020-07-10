@@ -1,15 +1,16 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToOne } from 'typeorm';
+import { Column, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToOne, RelationId } from 'typeorm';
 import { ContentEntity } from '../../cms/content/entities/content.entity';
 import { OrderEntity } from './order.entity';
 import { ColumnNumericTransformer } from '../../shared/column-numeric-transformer';
 import { MenuItemEntity } from '../../merchants/entities/menu-item.entity';
+import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.entity';
 
 @Entity()
 export class OrderItemEntity extends ContentEntity {
 
   @ManyToOne(type => OrderEntity, metadata => metadata.orderItems, {
     lazy: true,
-    cascade: false,
+    onDelete: 'CASCADE',
   })
   @JoinColumn()
   order: OrderEntity;
@@ -45,6 +46,16 @@ export class OrderItemEntity extends ContentEntity {
 
   @Column('text', { nullable: true, default: null })
   comment: string;
+
+  @ManyToMany(type => MenuSubOptionEntity, {
+    // lazy: true,
+    cascade: true,
+  })
+  @JoinTable()
+  subOptions: MenuSubOptionEntity[];
+
+  @RelationId((orderItem: OrderItemEntity) => orderItem.subOptions)
+  subOptionIds: number[];
 
   constructor(init?: Partial<OrderItemEntity>) {
     super();

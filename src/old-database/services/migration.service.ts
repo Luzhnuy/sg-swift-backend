@@ -237,6 +237,7 @@ export class MigrationService {
     });
     const addr = await this.geocoderService.getGeocodeAddress(addressStr);
     if (addr) {
+      console.log('ALERT ::: address was detected!!!:', addressStr);
       const tmr = timer(2000);
       await tmr.toPromise();
       const geoCodeZipCode = this.geocoderService.getShortZipcode(addr);
@@ -277,6 +278,8 @@ export class MigrationService {
       } else {
         console.log('ADDRESS WASN\'T SAVED FOR DISABLED MERCHANT 1', account.id, geoCodeZipCode, accZipCode);
       }
+    } else {
+      console.log('ALERT ::: address wasn\'t detected!!!:', addressStr);
     }
     if (changed) {
       await this.repMerchantEntity.save(merchantEntity);
@@ -375,7 +378,6 @@ export class MigrationService {
       refUserId: refCustomer ? refCustomer.userId : null,
       refPaid: user.refPaid,
       credit: user.credit,
-      debtAmount: 0,
       isFacebook: this.isFacebook(user.username),
       appVersion: user.appversion || '1.0',
     });
@@ -585,26 +587,26 @@ export class MigrationService {
   }
 
   private decorateEmail(email) {
-    // return email;
-    return 'sg_prod__' + email;
+    return email;
+    // return 'sg_prod__' + email;
   }
 
   private decorateClientId(clientId: string | number) {
+    return parseInt(clientId.toString(), 10);
+    // clientId = parseInt(clientId.toString(), 10);
+    // clientId += 999;
     // return clientId;
-    clientId = parseInt(clientId.toString(), 10);
-    clientId += 999;
-    return clientId;
   }
 
   private decorateRef(ref: string) {
-    // return ref;
-    return `prod-${ref}`;
+    return ref;
+    // return `prod-${ref}`;
   }
 
   private decorateOrderUuid(uuid) {
-    // return uuid;
-    uuid = uuid.substr(5);
-    return `prod-${uuid}`;
+    return uuid;
+    // uuid = uuid.substr(5);
+    // return `prod-${uuid}`;
   }
 
   private getMarketingEmail(user: Users) {

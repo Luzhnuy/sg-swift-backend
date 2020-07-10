@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PermissionEntity } from '../../cms/roles-and-permissions/entities/permission.entity';
-import { SettingsService } from '../services/settings.service';
 import { SettingsEntity } from '../entities/settings.entity';
+import { SettingsService } from '../services/settings.service';
 
 export enum SettingsPermissionKeys {
   AllowViewSettingsVariables = 'SettingsAllowViewSettingsVariables',
@@ -17,6 +17,8 @@ export enum SettingsVariablesKeys {
   OneSignalSnapGrabKey = 'OneSignal Snap Grab Key',
   OneSignalSnapGrabSwiftId = 'OneSignal Snap Grab Swift Id',
   OneSignalSnapGrabSwiftKey = 'OneSignal Snap Grab Swift Key',
+  OneSignalSnapGrabMerchantId = 'OneSignal Snap Grab Merchant Id',
+  OneSignalSnapGrabMerchantKey = 'OneSignal Snap Grab Merchant Key',
   DriversImagesHost = 'Images Host Address',
   TrackOrderWeb = 'Track Order Url',
   TwilioSid = 'Twilio SID',
@@ -27,6 +29,7 @@ export enum SettingsVariablesKeys {
   GoogleMapsApiKey = 'Google Maps Api Key',
   PayPalPublicKey = 'PayPal public key',
   PayPalSecret = 'PayPal secret',
+  Environment = 'Environment',
 }
 
 @Injectable()
@@ -101,6 +104,18 @@ export class SettingsConfig {
       isDefault: true,
     }),
     new SettingsEntity({
+      key: SettingsVariablesKeys.OneSignalSnapGrabMerchantId,
+      value: '',
+      comment: 'OneSignal Api Id for merchant portal',
+      isDefault: true,
+    }),
+    new SettingsEntity({
+      key: SettingsVariablesKeys.OneSignalSnapGrabMerchantKey,
+      value: '',
+      comment: 'OneSignal Rest Api Key for merchant portal',
+      isDefault: true,
+    }),
+    new SettingsEntity({
       key: SettingsVariablesKeys.DriversImagesHost,
       value: '',
       comment: 'Host for drivers image (for emails)',
@@ -158,6 +173,12 @@ export class SettingsConfig {
       key: SettingsVariablesKeys.PayPalSecret,
       value: '',
       comment: 'PayPal secret',
+      isDefault: true,
+    }),
+    new SettingsEntity({
+      key: SettingsVariablesKeys.Environment,
+      value: '',
+      comment: 'Environment',
       isDefault: true,
     }),
   ];

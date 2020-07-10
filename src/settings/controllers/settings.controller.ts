@@ -1,17 +1,10 @@
 import {
   Body,
-  ConflictException,
   Controller,
   Get,
-  Header,
-  HttpService,
   Post,
-  Put,
-  Query,
-  UnauthorizedException,
-  UnprocessableEntityException,
   UseGuards,
-  Headers, Delete,
+  Delete,
 } from '@nestjs/common';
 import { PermissionsGuard } from '../../cms/roles-and-permissions/guards/permissions.guard';
 import { SettingsService } from '../services/settings.service';

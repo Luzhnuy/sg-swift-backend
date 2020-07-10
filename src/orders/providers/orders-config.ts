@@ -10,6 +10,9 @@ import { RolesAndPermissionsModuleConfig } from '../../cms/roles-and-permissions
 export enum PermissionKeys {
   AllowChangeOrderStatus = 'OrdersAllowChangeOrderStatus',
   AllowDownloadReport = 'OrdersAllowDownloadReport',
+  AllowViewPriceCalculatorConstants = 'OrdersAllowViewPriceCalculatorConstants',
+  AllowEditPriceCalculatorConstants = 'OrdersAllowEditPriceCalculatorConstants',
+  AllowRateOwnOrder = 'OrdersAllowRateOwnOrder',
 }
 
 @Injectable()
@@ -27,6 +30,21 @@ export class OrdersConfig extends RolesAndPermissionsModuleConfig {
       description: 'Allow to download orders reports',
       group: this.MODULE_GROUP,
     }),
+    new PermissionEntity({
+      key: PermissionKeys.AllowViewPriceCalculatorConstants,
+      description: 'Allow to view price calculation constants list',
+      group: this.MODULE_GROUP,
+    }),
+    new PermissionEntity({
+      key: PermissionKeys.AllowEditPriceCalculatorConstants,
+      description: 'Allow to edit price calculation constants',
+      group: this.MODULE_GROUP,
+    }),
+    new PermissionEntity({
+      key: PermissionKeys.AllowRateOwnOrder,
+      description: 'Allow to rate and put feedback for own orders',
+      group: this.MODULE_GROUP,
+    }),
   ];
   public readonly MODULE_CONTENTS = [
     OrderEntity,
@@ -41,7 +59,7 @@ export class OrdersConfig extends RolesAndPermissionsModuleConfig {
     this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, DriversRolesName.Driver);
     this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, CustomersRolesName.Customer);
     // this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, MerchantsRolesName.Merchant);
-
+    this.addDefPerRoleShort(PermissionKeys.AllowRateOwnOrder, CustomersRolesName.Customer);
     this.addDefPerRoleShort(PermissionKeys.AllowDownloadReport, MerchantsRolesName.Merchant);
 
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, OrderEntity.name, DriversRolesName.Driver);

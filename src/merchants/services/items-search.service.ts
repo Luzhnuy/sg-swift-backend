@@ -24,7 +24,7 @@ export class ItemsSearchService {
         {
           fuzzy: {
             name : {
-              boost : 2,
+              boost : 5,
               value: q,
             },
           },
@@ -34,11 +34,34 @@ export class ItemsSearchService {
         {
           fuzzy: {
             description : {
+              boost : 3,
               value: q,
             },
           },
         },
       );
+      if (q.length >= 3) {
+        shouldQuery.push(
+          {
+            wildcard: {
+              name : {
+                boost : 2,
+                value: `${q}*`,
+              },
+            },
+          },
+        );
+        shouldQuery.push(
+          {
+            wildcard: {
+              description : {
+                boost : 1,
+                value: `${q}*`,
+              },
+            },
+          },
+        );
+      }
     });
     const { body } = await this.elasticsearchService
       .search({
@@ -49,7 +72,7 @@ export class ItemsSearchService {
           query: {
             bool: {
               should: shouldQuery,
-              must: {
+              filter: {
                 term: {
                   isPublished: true,
                 },
@@ -63,7 +86,6 @@ export class ItemsSearchService {
   }
 
   public async registerMenuItems(items: MenuItemEntity | MenuItemEntity[]) {
-
     items = Array.isArray(items) ? items : [ items ];
     for (const item of items) {
       const doc: RequestParams.Index<Partial<MenuItemEntity>> = {
@@ -91,6 +113,25 @@ export class ItemsSearchService {
           id: id.toString(),
         });
     }
+  }
+
+  public async removeAll() {
+    return await this.elasticsearchService
+      .deleteByQuery( {
+        index: this.MenuItemIndex,
+        body: {
+          query: {
+            match_all: {},
+            // range: {
+            //   id: {
+            //     gte: 1,
+            //   },
+            // },
+          },
+        },
+      }, {}, (res) => {
+        // console.log(res);
+      });
   }
 
   private isMenuItemPublished(menuItem: MenuItemEntity) {

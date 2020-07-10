@@ -11,8 +11,10 @@ import {
 import { MenuItemEntity } from '../entities/menu-item.entity';
 import { MenuCategoryEntity } from '../entities/menu-category.entity';
 import { RolesAndPermissionsModuleConfig } from '../../cms/roles-and-permissions/misc/roles-and-permissions-module-config';
-import { CustomersRolesName } from '../../customers/providers/customers-config';
 import { PaymentCardEntity } from '../../payments/entities/payment-card.entity';
+import { MenuOptionEntity } from '../entities/menu-option.entity';
+import { MenuItemOptionEntity } from '../entities/menu-item-option.entity';
+import { MenuSubOptionEntity } from '../entities/menu-sub-option.entity';
 
 export enum MerchantsPermissionKeys {
   ChangeEnableBooking = 'MerchantsChangeEnableBooking',
@@ -54,6 +56,9 @@ export class MerchantsConfigService extends RolesAndPermissionsModuleConfig {
     MerchantEntity,
     MenuCategoryEntity,
     MenuItemEntity,
+    MenuOptionEntity,
+    MenuSubOptionEntity,
+    MenuItemOptionEntity,
   ];
 
   public readonly MODULE_DEFAULT_PERMISSION_ROLES = {};
@@ -65,18 +70,13 @@ export class MerchantsConfigService extends RolesAndPermissionsModuleConfig {
 
     this.addDefPerRole(ContentPermissionsKeys.ContentViewOwn, MerchantEntity.name, MerchantsRolesName.Merchant);
     this.addDefPerRole(ContentPermissionsKeys.ContentEditOwn, MerchantEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentAdd, MenuItemEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentViewOwn, MenuItemEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentEditOwn, MenuItemEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentRemoveOwn, MenuItemEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentAdd, MenuCategoryEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentViewOwn, MenuCategoryEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentEditOwn, MenuCategoryEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentRemoveOwn, MenuCategoryEntity.name, MerchantsRolesName.Merchant);
 
-    this.addDefPerRole(ContentPermissionsKeys.ContentViewOwn, PaymentCardEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentEditOwn, PaymentCardEntity.name, MerchantsRolesName.Merchant);
-    this.addDefPerRole(ContentPermissionsKeys.ContentAdd, PaymentCardEntity.name, MerchantsRolesName.Merchant);
+    this.addAllOwnPermissions(MenuOptionEntity.name, MerchantsRolesName.Merchant);
+    this.addAllOwnPermissions(MenuSubOptionEntity.name, MerchantsRolesName.Merchant);
+    this.addAllOwnPermissions(MenuItemEntity.name, MerchantsRolesName.Merchant);
+    this.addAllOwnPermissions(MenuItemOptionEntity.name, MerchantsRolesName.Merchant);
+    this.addAllOwnPermissions(MenuCategoryEntity.name, MerchantsRolesName.Merchant);
+    this.addAllOwnPermissions(PaymentCardEntity.name, MerchantsRolesName.Merchant);
 
     this.addDefPerRoleShort(MerchantsPermissionKeys.ChangeEnableBooking, MerchantsRolesName.Merchant);
     this.addDefPerRoleShort(UsersPermissionsKeys.EditSelfUser, MerchantsRolesName.Merchant);
@@ -88,7 +88,10 @@ export class MerchantsConfigService extends RolesAndPermissionsModuleConfig {
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuItemEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MerchantEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MerchantEntity.name, RolesAndPermissionsRolesName.Anonymous);
-    // this.addDefPerRoleShort(UsersPermissionsKeys.CreateDelegatedUsers, MerchantsRolesName.Merchant);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuOptionEntity.name, RolesAndPermissionsRolesName.Anonymous);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuOptionEntity.name, RolesAndPermissionsRolesName.Anonymous);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuItemOptionEntity.name, RolesAndPermissionsRolesName.Anonymous);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuItemOptionEntity.name, RolesAndPermissionsRolesName.Anonymous);
   }
 
 }

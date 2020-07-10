@@ -1,8 +1,9 @@
-import { Entity, Column, PrimaryGeneratedColumn, JoinColumn, OneToMany, ManyToOne } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, JoinColumn, OneToMany, ManyToOne, Unique } from 'typeorm';
 import { MapDistanceEntity } from './map-distance.entity';
 
 @Entity()
-export class AppZipcodesEntity {
+@Unique(['zipcode'])
+export class MerchantsZipcodeEntity {
 
   @PrimaryGeneratedColumn()
   public id: number;
@@ -14,7 +15,7 @@ export class AppZipcodesEntity {
   @Column('varchar', { nullable: false, length: 3 })
   zipcode: string;
 
-  constructor(data: Partial<MapDistanceEntity>) {
+  constructor(data: Partial<MerchantsZipcodeEntity>) {
     if (data) {
       Object.assign(this, data);
     }

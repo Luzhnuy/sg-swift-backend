@@ -38,6 +38,12 @@ export class MenuItemsController extends CrudController {
       .migrateMenuItems();
   }
 
+  @Get('resetSearch')
+  resetSearch() {
+    return this.merchantsService
+      .clearSearch();
+  }
+
   @Get('doSearch')
   doSearch(
     @Query('query') query: string,

@@ -5,15 +5,14 @@ import { ContentPermissionHelper } from '../../cms/roles-and-permissions/misc/co
 import { CrudController } from '../../cms/content/controllers/crud-controller';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MenuItemOptionEntity } from '../entities/menu-item-option.entity';
-import { MenuOptionEntity } from '../entities/menu-option.entity';
+import { MenuSubOptionEntity } from '../entities/menu-sub-option.entity';
 
-@Controller('menu-item-option')
-@CrudEntity(MenuOptionEntity)
-export class MenuOptionsController extends CrudController {
+@Controller('menu-sub-options')
+@CrudEntity(MenuSubOptionEntity)
+export class MenuSubOptionsController extends CrudController {
   constructor(
-    @InjectRepository(MenuItemOptionEntity)
-      protected readonly repository: Repository<MenuOptionEntity>,
+    @InjectRepository(MenuSubOptionEntity)
+      protected readonly repository: Repository<MenuSubOptionEntity>,
     protected rolesAndPermissions: RolesAndPermissionsService,
     protected contentPermissionsHelper: ContentPermissionHelper,
   ) {

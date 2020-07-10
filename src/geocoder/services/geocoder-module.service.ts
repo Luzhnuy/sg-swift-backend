@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
-import { MerchantsConfigService } from './merchants-config.service';
+import { GeocoderConfigService } from './geocoder-config.service';
 
 @Injectable()
-export class MerchantsModuleService {
+export class GeocoderModuleService {
 
   constructor(
-    private config: MerchantsConfigService,
+    private config: GeocoderConfigService,
     private rolesAndPermissions: RolesAndPermissionsService,
   ) {}
 

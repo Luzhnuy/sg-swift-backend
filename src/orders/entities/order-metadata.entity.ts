@@ -69,6 +69,9 @@ export class OrderMetadataEntity {
   @Column('int', { default: null, nullable: true, comment: 'amount in cents (like chargedAmount)' })
   debtAmount: number;
 
+  @Column('int', { default: null, nullable: true, comment: 'amount in cents (see Stripe docs)' })
+  tipChargedAmount: number;
+
   @Column('int', { default: null, nullable: true, comment: 'Local time in minutes' })
   scheduledTime: number;
 
@@ -127,6 +130,9 @@ export class OrderMetadataEntity {
   @Column('text', { nullable: true, default: null })
   chargeId2: string;
 
+  @Column('text', { nullable: true, default: null })
+  tipChargeId: string;
+
   @Column('varchar', { length: 4, nullable: true, default: null })
   lastFour: string;
 
@@ -154,6 +160,18 @@ export class OrderMetadataEntity {
 
   @Column('integer', { nullable: false, default: -300 })
   utcOffset: number;
+
+  @Column('boolean', { default: false })
+  rated: boolean;
+
+  @Column('tinyint', { nullable: true, default: null })
+  rate: number;
+
+  @Column('text', { nullable: true, default: null })
+  feedback: string;
+
+  @Column('varchar', { length: 10, default: null, nullable: true })
+  tripUuid: string;
 
   constructor(init?: Partial<OrderMetadataEntity>) {
     if (init) {

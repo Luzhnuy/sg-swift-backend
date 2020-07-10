@@ -39,6 +39,7 @@ export enum OrderType {
   Custom = 'Custom',
   Menu = 'Menu',
   Booking = 'Booking',
+  Trip = 'Trip',
 }
 
 @Entity()
@@ -132,6 +133,7 @@ export class OrderEntity extends ContentEntity {
 
   @OneToMany(type => OrderItemEntity, orderItems => orderItems.order, {
     eager: true,
+    onDelete: 'CASCADE',
   })
   orderItems: OrderItemEntity[];
 

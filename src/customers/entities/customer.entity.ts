@@ -47,6 +47,9 @@ export class CustomerEntity extends ContentEntity {
   @Column('text', { nullable: true, default: null })
   email: string;
 
+  @Column('text', { nullable: true, default: null })
+  logo: string;
+
   constructor(data: Partial<CustomerEntity>) {
     super();
     this.isPublished = false;

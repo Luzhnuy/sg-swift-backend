@@ -34,8 +34,7 @@ import { PaymentCardEntity } from '../../payments/entities/payment-card.entity';
 import { SmsActivationService } from '../../sms-activation/services/sms-activation.service';
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { SettingsService } from '../../settings/services/settings.service';
-import { SendGridService } from '@anchan828/nest-sendgrid';
-import * as SendGridClient from '@sendgrid/client';
+import { EmailSenderService } from '../../email-distributor/services/email-sender.service';
 
 @Controller('merchants')
 @CrudEntity(MerchantEntity)
@@ -52,9 +51,9 @@ export class MerchantsController extends CrudController {
     protected contentPermissionsHelper: ContentPermissionHelper,
     private merchantsService: MerchantsService,
     private usersService: UsersService,
-    private sendGrid: SendGridService,
     private smsActivationService: SmsActivationService,
     private settingsService: SettingsService,
+    private readonly emailSenderService: EmailSenderService,
   ) {
     super(rolesAndPermissions, contentPermissionsHelper);
   }
@@ -63,7 +62,7 @@ export class MerchantsController extends CrudController {
   async testRecipient(
     @Query('email') email: string,
   ) {
-    return this.createSendGridRecipient(email);
+    return this.emailSenderService.addToCustomersList(email);
   }
 
   @Get('')
@@ -143,7 +142,8 @@ export class MerchantsController extends CrudController {
     try {
       merchant.user = await this.usersService
         .addRoleIfAbsent(merchant.user, MerchantsRolesName.Merchant);
-      merchant.user.isActive = false;
+      merchant.user.isActive = true;
+      // merchant.user.isActive = false;
       merchant.user = await this.usersService
         .createUser(merchant.user);
       // merchant.authorId = merchant.user.id;
@@ -158,10 +158,11 @@ export class MerchantsController extends CrudController {
     if (user.isAuthorized()) {
       merchant.authorId = user.id;
     }
-    await this.generateSmsCode(merchant.user.id, merchant.phone);
+    // await this.generateSmsCode(merchant.user.id, merchant.phone);
     merchant.enableBooking = true;
     merchant.enableMenu = false;
-    merchant.isPublished = false;
+    // merchant.isPublished = false;
+    merchant.isPublished = true;
     merchant.userId = merchant.user.id;
     const departments = merchant.departments;
     merchant.departments = null;
@@ -179,6 +180,7 @@ export class MerchantsController extends CrudController {
     } catch (e) {
       throw new UnprocessableEntityException(e.toString());
     }
+    this.sendEmail(merchant.email);
     return { success: true };
   }
 
@@ -308,14 +310,6 @@ export class MerchantsController extends CrudController {
     @ContentEntityParam() currentEntity: MerchantEntity,
     @Body() newEntity: MerchantEntity,
   ) {
-    if (newEntity.logo) {
-      newEntity.logo = this.createImage(newEntity);
-    } else if (newEntity.logo === null) {
-      if (currentEntity.logo) {
-        const imgPath = currentEntity.logo.replace('/', '');
-        fs.unlink(imgPath, () => null);
-      }
-    }
     if (newEntity.enableMenu) {
       const permission = await this.rolesAndPermissions
         .getPermissionByKey(MerchantsPermissionKeys.ChangeEnableBooking);
@@ -341,6 +335,14 @@ export class MerchantsController extends CrudController {
       }
       newEntity.user = newUser;
     }
+    if (newEntity.logo && !newEntity.logo.startsWith('http')) {
+      newEntity.logo = this.createImage(newEntity);
+    } else if (newEntity.logo === null) {
+      if (currentEntity.logo) {
+        const imgPath = currentEntity.logo.replace('/', '');
+        fs.unlink(imgPath, () => null);
+      }
+    }
     const result = await super.updateContentEntity(user, currentEntity, newEntity);
     this.merchantsService.migrateMenuItems({
       merchantId: currentEntity.id,
@@ -349,16 +351,12 @@ export class MerchantsController extends CrudController {
   }
 
   @Post('contact-email')
-  contactEmail(@Body() { email, message, name }: { email: string, message: string, name: string }) {
-    this.sendGrid.send({
-      to: 'merchant@snapgrabdelivery.com',
-      from: {
-        email: 'support@SnapGrabDelivery.com',
-        name: 'SnapGrab',
-      },
-      subject: `This is an email from: ${name} (${email})`,
-      text: message,
-    });
+  async contactEmail(@Body() { email, message, name }: { email: string, message: string, name: string }) {
+    await this.emailSenderService
+      .sendEmail(
+        'merchant@snapgrabdelivery.com',
+        `This is an email from: ${name} (${email})`,
+        message);
     return { success: true };
   }
 
@@ -401,80 +399,18 @@ export class MerchantsController extends CrudController {
 
   private async sendEmail(email: string) {
     if (email) {
-      await this.sendGrid.send({
-        to: email,
-        from: {
-          email: 'support@SnapGrabDelivery.com',
-          name: 'SnapGrab',
-        },
-        templateId: EmailTemplates.MerchantRegistration,
-        dynamicTemplateData: {
-          '[Server_Name]': 'SnapGrab',
-        },
-      });
-      await this.addMerchantEmailToMerchantRecipientsList(email);
+      await this.emailSenderService
+        .sendEmailToMerchant(
+          email,
+          EmailTemplates.MerchantRegistration,
+          {
+            '[Server_Name]': 'SnapGrab',
+          },
+        );
+      return true;
     } else {
       throw new BadRequestException();
     }
-  }
-
-  private async addMerchantEmailToMerchantRecipientsList(email: string) {
-    const customersList = 7238438;
-    const nonCustomerList = 7238428;
-    const merchantsList = 8443043;
-    let recipient = await this.getSendGridRecipient(email);
-    if (!recipient) {
-      recipient = await this.createSendGridRecipient(email);
-      if (!recipient) {
-        console.log('CANNOT CREATE RECIPIENT :: ', email);
-      }
-    }
-    const request: any = {};
-    request.method = 'POST';
-    request.url = `/v3/contactdb/lists/${merchantsList}/recipients/${recipient.id}`;
-    await SendGridClient.request(request);
-    const queryParams = {
-      list_id: merchantsList,
-      recipient_id: recipient.id,
-    };
-    request.qs = queryParams;
-    request.method = 'DELETE';
-    request.url = `/v3/contactdb/lists/${nonCustomerList}/recipients/${recipient.id}`;
-    await SendGridClient.request(request);
-  }
-
-  private async createSendGridRecipient(email) {
-    const request: any = {};
-    request.body = [ { email } ];
-    request.method = 'POST';
-    request.url = '/v3/contactdb/recipients';
-    SendGridClient.setApiKey(this.settingsService.getValue(SettingsVariablesKeys.SendGridKey));
-    const res = await SendGridClient.request(request);
-    if (res[1].new_count) {
-      return {
-        id: res[1].persisted_recipients[0],
-        email,
-      };
-    }
-    return null;
-  }
-
-  private async getSendGridRecipient(email) {
-    const request: any = {};
-    const queryParams: any = {
-      email,
-    };
-    request.qs = queryParams;
-    request.method = 'GET';
-    request.url = '/v3/contactdb/recipients/search';
-    SendGridClient.setApiKey(this.settingsService.getValue(SettingsVariablesKeys.SendGridKey));
-    const res = await SendGridClient.request(request);
-    if (!res[1]) {
-      console.log('RECIPIENTS ERROR :: ', email, res);
-      return null;
-    }
-    const recipients: Array<{ id: string, email: string; }> = res[1].recipients;
-    return recipients[0];
   }
 
   protected async getQueryBuilder(user, query) {

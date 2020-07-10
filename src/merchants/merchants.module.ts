@@ -17,6 +17,13 @@ import { PaymentsModule } from '../payments/payments.module';
 import { GeocoderModule } from '../geocoder/geocoder.module';
 import { ElasticsearchModule } from '@nestjs/elasticsearch';
 import { ItemsSearchService } from './services/items-search.service';
+import { EmailDistributorModule } from '../email-distributor/email-distributor.module';
+import { MenuItemOptionController } from './controllers/menu-item-option.controller';
+import { MenuOptionsController } from './controllers/menu-options.controller';
+import { MenuSubOptionsController } from './controllers/menu-sub-options.controller';
+import { MenuItemOptionEntity } from './entities/menu-item-option.entity';
+import { MenuOptionEntity } from './entities/menu-option.entity';
+import { MenuSubOptionEntity } from './entities/menu-sub-option.entity';
 
 @Module({
   imports: [
@@ -29,13 +36,18 @@ import { ItemsSearchService } from './services/items-search.service';
       MerchantDepartmentEntity,
       MenuCategoryEntity,
       MenuItemEntity,
+      MenuItemOptionEntity,
+      MenuOptionEntity,
+      MenuSubOptionEntity,
     ]),
+    EmailDistributorModule,
     SettingsModule,
     SmsActivationModule,
     PaymentsModule,
     GeocoderModule,
   ],
-  controllers: [MerchantsController, MenuCategoriesController, MenuItemsController],
+  controllers: [MerchantsController, MenuCategoriesController, MenuItemsController,
+    MenuItemOptionController, MenuOptionsController, MenuSubOptionsController],
   providers: [MerchantsService, MerchantsModuleService, MerchantsConfigService, ItemsSearchService],
   exports: [
     MerchantsService,

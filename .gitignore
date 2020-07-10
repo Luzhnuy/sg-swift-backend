@@ -2,6 +2,7 @@
 /dist
 /node_modules
 /uploads
+/src/environment.ts
 
 # Logs
 logs

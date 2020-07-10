@@ -45,7 +45,7 @@ export class RolesService {
         name: role.name,
       });
 
-    const isNew = !!existedRole;
+    const isNew = !existedRole;
 
     if (existedRole) {
       role = existedRole;

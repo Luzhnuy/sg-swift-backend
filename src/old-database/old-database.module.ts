@@ -24,25 +24,27 @@ import { CustomerDeviceInfoEntity } from '../customers/entities/customer-device-
 import { OrderEntity } from '../orders/entities/order.entity';
 import { OrderMetadataEntity } from '../orders/entities/order-metadata.entity';
 import { OrderItemEntity } from '../orders/entities/order-item.entity';
+import { Environment } from '../environment';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       name: 'oldDatabaseConn',
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'username',
-      password: 'password',
-      database: 'old_database_name',
+      type: Environment.mysql.type,
+      host: Environment.mysql.host,
+      port: Environment.mysql.port,
+      username: Environment.mysql.username,
+      password: Environment.mysql.password,
+      database: Environment.mysql.databaseOld,
       entities: [__dirname + '/entities/*{.ts,.js}'],
-      synchronize: true,
+      synchronize: Environment.mysql.synchronize,
     }),
     TypeOrmModule.forFeature([
       Accounts,
       Categories,
       EmailSubscriptions,
       Historyorders,
+      // Jobs,
       Menus,
       OrdersInfo,
       Stripecustomers,

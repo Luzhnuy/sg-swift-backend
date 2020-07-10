@@ -3,14 +3,22 @@ import { OrderSource, OrderType } from '../entities/order.entity';
 import { OrderExtras, OrderPrepareRequestData } from '../data/misc';
 import { PromoCodesService } from '../../promo-codes/promo-codes.service';
 import { CustomersService } from '../../customers/services/customers.service';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { PriceCalculatorConstantEntity, PriceCalculatorConstants } from '../entities/price-calculator-constant.entity';
 
 @Injectable()
 export class OrdersPriceCalculatorService {
 
+  private constants: Map<PriceCalculatorConstants, number> = new Map();
+
   constructor(
+    @InjectRepository(PriceCalculatorConstantEntity) private readonly repository: Repository<PriceCalculatorConstantEntity>,
     private readonly promoCodesService: PromoCodesService,
     private readonly customersService: CustomersService,
-  ) {}
+  ) {
+    this.init();
+  }
 
   public async prepareOrder(data: OrderPrepareRequestData) {
     switch (data.type) {
@@ -20,24 +28,31 @@ export class OrdersPriceCalculatorService {
         return this.calcCustomOrder(data);
       case OrderType.Booking:
         return this.calcBookingOrder(data);
+      case OrderType.Trip:
+        return this.calcTripOrder(data);
     }
   }
 
   private async calcCustomOrder(data: OrderPrepareRequestData) {
-    data.extras = this.getExtras(data.distance, data.scheduledTime, data.bringBack, data.largeOrder);
+    data.extras = this.getCustomExtras(data.distance, data.scheduledTime, data.bringBack, data.largeOrder);
     data.deliveryCharge = this.calcExtras(data.extras);
     return await this.calcTaxes(data);
   }
 
   private async calcBookingOrder(data: OrderPrepareRequestData) {
-    data.extras = this.getExtras(data.distance, data.scheduledTime, data.bringBack, data.largeOrder);
-    // data.deliveryCharge = Object.values(data.extras).reduce((sum, val) => (sum + val), 0);
+    data.extras = this.getBookingExtras(data.distance, data.scheduledTime, data.bringBack, data.largeOrder);
+    data.deliveryCharge = this.calcExtras(data.extras);
+    return await this.calcTaxes(data);
+  }
+
+  private async calcTripOrder(data: OrderPrepareRequestData) {
+    data.extras = this.getTripExtras(data.distance, data.scheduledTime);
     data.deliveryCharge = this.calcExtras(data.extras);
     return await this.calcTaxes(data);
   }
 
   private async calcMenuOrder(data: OrderPrepareRequestData) {
-    data.deliveryCharge = 4.99;
+    data.deliveryCharge = this.getConstant(PriceCalculatorConstants.MenuBaseFare);
     data.extras = {
       surgeTime: this.isSurgeTime(data.scheduledTime),
       baseFare: data.deliveryCharge,
@@ -45,7 +60,7 @@ export class OrdersPriceCalculatorService {
       largeOrderFare: 0,
     };
     if (data.extras.surgeTime) {
-      data.deliveryCharge *= 1.2;
+      data.deliveryCharge += data.deliveryCharge * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
     }
     return await this.calcTaxes(data);
   }
@@ -60,31 +75,87 @@ export class OrdersPriceCalculatorService {
     }, 0);
   }
 
-  private getExtras(distance = 0, scheduledTime = 0, bringBack = false, largeOrder = false): OrderExtras {
+  private getBookingExtras(distance = 0, scheduledTime = 0, bringBack = false, largeOrder = false): OrderExtras {
     const extras: OrderExtras = {
       baseFare: 0,
       distanceFare: 0,
       largeOrderFare: 0,
       surgeTime: false,
     };
-    extras.baseFare = 12.99;
-    if (distance > 3000) {
-      const km = distance > 20000 ? 20 : (distance - 3000) / 1000;
-      extras.distanceFare = km * 1.5;
+    extras.baseFare = this.getConstant(PriceCalculatorConstants.BookingBaseFare);
+    if (distance > this.getConstant(PriceCalculatorConstants.BookingDistanceFareMinDistance)) {
+      const km = (
+        distance >
+        this.getConstant(PriceCalculatorConstants.BookingDistanceFareMaxDistance) ?
+          this.getConstant(PriceCalculatorConstants.BookingDistanceFareMaxDistance) :
+          (distance - this.getConstant(PriceCalculatorConstants.BookingDistanceFareMinDistance))
+      ) / 1000;
+      extras.distanceFare = km * this.getConstant(PriceCalculatorConstants.BookingDistanceFareKoef);
     }
     if (largeOrder) {
-      extras.largeOrderFare = 3.33;
+      extras.largeOrderFare = this.getConstant(PriceCalculatorConstants.BookingLargeOrderFare);
     }
     extras.surgeTime = this.isSurgeTime(scheduledTime);
     if (extras.surgeTime) {
-      extras.baseFare += extras.baseFare * .2;
-      extras.distanceFare += extras.distanceFare * .2;
-      extras.largeOrderFare += extras.largeOrderFare * .2;
+      extras.baseFare += extras.baseFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.distanceFare += extras.distanceFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.largeOrderFare += extras.largeOrderFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
     }
     if (bringBack) {
-      extras.baseFare += extras.baseFare * .55;
-      extras.distanceFare += extras.distanceFare * .55;
-      extras.largeOrderFare += extras.largeOrderFare * .55;
+      extras.baseFare += extras.baseFare * this.getConstant(PriceCalculatorConstants.BookingBringBackFareKoef);
+      extras.distanceFare += extras.distanceFare * this.getConstant(PriceCalculatorConstants.BookingBringBackFareKoef);
+      extras.largeOrderFare += extras.largeOrderFare * this.getConstant(PriceCalculatorConstants.BookingBringBackFareKoef);
+    }
+    return extras;
+  }
+
+  private getTripExtras(distance = 0, scheduledTime = 0): OrderExtras {
+    const extras: OrderExtras = {
+      baseFare: 0,
+      distanceFare: 0,
+      largeOrderFare: 0,
+      surgeTime: false,
+    };
+    extras.baseFare = this.getConstant(PriceCalculatorConstants.TripBaseFare);
+    if (distance > this.getConstant(PriceCalculatorConstants.TripDistanceFareMinDistance)) {
+      const km = (
+        distance >
+        this.getConstant(PriceCalculatorConstants.TripDistanceFareMaxDistance) ?
+          this.getConstant(PriceCalculatorConstants.TripDistanceFareMaxDistance) :
+          (distance - this.getConstant(PriceCalculatorConstants.TripDistanceFareMinDistance))
+      ) / 1000;
+      extras.distanceFare = km * this.getConstant(PriceCalculatorConstants.TripDistanceFareKoef);
+    }
+    extras.surgeTime = this.isSurgeTime(scheduledTime);
+    if (extras.surgeTime) {
+      extras.baseFare += extras.baseFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.distanceFare += extras.distanceFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.largeOrderFare += extras.largeOrderFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+    }
+    return extras;
+  }
+
+  private getCustomExtras(distance = 0, scheduledTime = 0, bringBack = false, largeOrder = false): OrderExtras {
+    const extras: OrderExtras = {
+      baseFare: 0,
+      distanceFare: 0,
+      largeOrderFare: 0,
+      surgeTime: false,
+    };
+    extras.baseFare = this.getConstant(PriceCalculatorConstants.CustomBaseFare);
+    if (distance > this.getConstant(PriceCalculatorConstants.CustomDistanceFareMinDistance)) {
+      const km = (
+        distance >
+          this.getConstant(PriceCalculatorConstants.CustomDistanceFareMaxDistance) ?
+            this.getConstant(PriceCalculatorConstants.CustomDistanceFareMaxDistance) :
+            (distance - this.getConstant(PriceCalculatorConstants.CustomDistanceFareMinDistance))
+        ) / 1000;
+      extras.distanceFare = km * this.getConstant(PriceCalculatorConstants.CustomDistanceFareKoef);
+    }
+    extras.surgeTime = this.isSurgeTime(scheduledTime);
+    if (extras.surgeTime) {
+      extras.baseFare += extras.baseFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.distanceFare += extras.distanceFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
     }
     return extras;
   }
@@ -112,10 +183,7 @@ export class OrdersPriceCalculatorService {
         }
       }
     }
-    if (
-      data.type === OrderType.Booking ||
-      data.type === OrderType.Menu
-    ) {
+    if ([OrderType.Booking, OrderType.Trip, OrderType.Menu].indexOf(data.type) > -1) {
       const subtotal = data.subtotal || 0;
       data.tps = .05 * (data.deliveryCharge + subtotal + data.discount);
       data.tvq = .09975 * (data.deliveryCharge + subtotal + data.discount);
@@ -146,8 +214,39 @@ export class OrdersPriceCalculatorService {
   }
 
   private isSurgeTime(scheduledTime): boolean {
-    const minTime = 945; // 15:45 = 15 * 60 + 45;
-    const maxTime = 1080; // 18:00 = 18 * 60;
+    const minTime = this.getConstant(PriceCalculatorConstants.SurgeTimeStart);
+    const maxTime = this.getConstant(PriceCalculatorConstants.SurgeTimeEnd);
     return scheduledTime >= minTime && scheduledTime <= maxTime;
+  }
+
+  private async init() {
+    const constants = await this.repository.find();
+    const constantsKeys: PriceCalculatorConstants[] = Object.values(PriceCalculatorConstants);
+    const existedConstants: PriceCalculatorConstants[] = constants.map(constant => constant.key);
+    for (const key of constantsKeys) {
+      if (existedConstants.indexOf(key) === -1) {
+        let newConstant = new PriceCalculatorConstantEntity({ key });
+        newConstant = await this.repository.save(newConstant);
+        constants.push(newConstant);
+      }
+    }
+    constants.forEach(constant => {
+      this.constants.set(constant.key, constant.value);
+    });
+  }
+
+  public async setConstant(key: PriceCalculatorConstants, value: number) {
+    const constant = await this.repository.findOne( { key });
+    constant.value = value;
+    await this.repository.save(constant);
+    this.constants.set(constant.key, constant.value);
+  }
+
+  public getConstant(key: PriceCalculatorConstants) {
+    return this.constants.get(key);
+  }
+
+  public getConstantsList() {
+    return this.repository.find();
   }
 }

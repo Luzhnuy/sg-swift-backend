@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module } from '@nestjs/common';
+import { HttpModule, MiddlewareConsumer, Module } from '@nestjs/common';
 import { CustomersController } from './controllers/customers.controller';
 import { CustomersService } from './services/customers.service';
 import { CmsModule } from '../cms/cms.module';
@@ -12,6 +12,7 @@ import { CustomersConfig } from './providers/customers-config';
 import { CustomersModuleService } from './services/customers-module.service';
 import { MerchantsModule } from '../merchants/merchants.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { EmailDistributorModule } from '../email-distributor/email-distributor.module';
 
 @Module({
   imports: [
@@ -21,6 +22,8 @@ import { PaymentsModule } from '../payments/payments.module';
       CustomerMetadataEntity,
       CustomerDeviceInfoEntity,
     ]),
+    EmailDistributorModule,
+    HttpModule,
     SettingsModule,
     SmsActivationModule,
     MerchantsModule,

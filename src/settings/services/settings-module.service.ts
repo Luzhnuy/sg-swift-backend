@@ -6,8 +6,8 @@ import { SettingsConfig } from '../providers/settings-config';
 export class SettingsModuleService {
 
   constructor(
-    private config: SettingsConfig,
-    private rolesAndPermissions: RolesAndPermissionsService,
+    private readonly config: SettingsConfig,
+    private readonly rolesAndPermissions: RolesAndPermissionsService,
   ) {}
 
   public async init() {

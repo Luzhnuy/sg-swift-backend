@@ -37,9 +37,6 @@ export class CustomerMetadataEntity extends ContentEntity {
   @Column('decimal', { precision: 5, scale: 2, default: 0, nullable: false, transformer: ColumnNumericTransformer })
   credit: number;
 
-  @Column('int', { default: null, nullable: true, comment: 'Amount in cents (see order.debtAmount)' })
-  debtAmount: number;
-
   @Column('boolean', { default: false })
   isFacebook: boolean;
 

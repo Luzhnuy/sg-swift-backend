@@ -4,40 +4,56 @@ import { SettingsVariablesKeys } from '../../settings/providers/settings-config'
 import { PaymentMethods } from '../entities/order-metadata.entity';
 import { EmailTemplates } from '../../email-distributor/data/email-templates';
 import { SettingsService } from '../../settings/services/settings.service';
-import { SendGridService } from '@anchan828/nest-sendgrid';
+import { EmailSenderService } from '../../email-distributor/services/email-sender.service';
 
 @Injectable()
 export class OrdersEmailSenderService {
 
   constructor(
     private readonly settingsService: SettingsService,
-    private readonly sendGrid: SendGridService,
+    private readonly emailSenderService: EmailSenderService,
   ) {}
 
   async sendReceiptBooking(order: OrderEntity) {
     const merchant = order.merchant;
     if (merchant.subscribedOnReceipt) {
-      return await this.sendGrid.send({
-        to: merchant.email,
-        from: {
-          email: this.settingsService.getValue(SettingsVariablesKeys.SupportEmail),
-          name: 'SnapGrab',
-        },
-        subject: 'SnapGrab - Success order',
-        templateId: this.getClientEmailTemplateId(order),
-        dynamicTemplateData: {
-          DATE: this.formatDate(new Date(), order.metadata.utcOffset / 60),
-          MERCHANT_NAME: order.metadata.pickUpTitle,
-          MERCHANT_ADDR: order.metadata.pickUpAddress,
-          DROPOFF_ADDR: order.metadata.dropOffAddress,
-          FEE: this.formatNumber(order.metadata.deliveryCharge),
-          TPS: this.formatNumber(order.metadata.tps),
-          TVQ: this.formatNumber(order.metadata.tvq),
-          TOTAL: this.formatNumber(order.metadata.totalAmount),
-          LASTFOUR: `**** ${order.metadata.lastFour}`,
-        },
-      });
+      return await this.emailSenderService
+        .sendEmailToMerchant(
+          merchant.email,
+          this.getClientEmailTemplateId(order),
+          {
+            DATE: this.formatDate(new Date(), order.metadata.utcOffset / 60),
+            MERCHANT_NAME: order.metadata.pickUpTitle,
+            MERCHANT_ADDR: order.metadata.pickUpAddress,
+            DROPOFF_ADDR: order.metadata.dropOffAddress,
+            FEE: this.formatNumber(order.metadata.deliveryCharge),
+            TPS: this.formatNumber(order.metadata.tps),
+            TVQ: this.formatNumber(order.metadata.tvq),
+            TOTAL: this.formatNumber(order.metadata.totalAmount),
+            LASTFOUR: `**** ${order.metadata.lastFour}`,
+          },
+        );
     }
+  }
+
+  sendCancelOrderEmail(order: OrderEntity) {
+    const data = this.getDataForNewTemplates(order);
+    const emailTemplate = EmailTemplates.AllCancelOrder;
+    return [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
+      this.emailSenderService
+        .sendEmailToMerchant(order.merchant.email, emailTemplate, data) :
+      this.emailSenderService
+        .sendEmailToCustomer(order.customer.email, emailTemplate, data);
+  }
+
+  sendConfirmationEmail(order: OrderEntity) {
+    const data = this.getDataForNewTemplates(order);
+    const emailTemplate = EmailTemplates.AllConfirmOrder;
+    return [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
+      this.emailSenderService
+        .sendEmailToMerchant(order.merchant.email, emailTemplate, data) :
+      this.emailSenderService
+        .sendEmailToCustomer(order.customer.email, emailTemplate, data);
   }
 
   async sendReceiptCustomer(order: OrderEntity) {
@@ -45,48 +61,44 @@ export class OrdersEmailSenderService {
     if (customer.email.endsWith('@facebook.com')) {
       throw new UnprocessableEntityException('This user hasn\'t correct email');
     }
-    await this.sendGrid.send({
-      to: customer.email,
-      from: {
-        email: this.settingsService.getValue(SettingsVariablesKeys.SupportEmail),
-        name: 'SnapGrab',
-      },
-      subject: 'Success Order',
-      templateId: this.getClientEmailTemplateId(order),
-      dynamicTemplateData: {
-        DATE: this.formatDate(new Date(order.createdAt), -4),
-        MENU: order.type,
-        PICKUP: order.metadata.pickUpAddress,
-        DROPOFF: order.metadata.dropOffAddress,
-        ITEMS: order.type === OrderType.Custom
-          ? order.metadata.description
-          : order.orderItems.reduce((res, item) => {
-            if (res) {
-              res += ' | ';
-            }
-            res += `${item.quantity} x ${item.description} $${item.price}`;
-            return res;
-          }, ''),
-        SERVICEFEE: order.metadata.serviceFee !== null ? this.formatNumber(order.metadata.serviceFee) : 'TBD',
-        SUBTOTAL: order.metadata.customAmount !== null ?
-          this.formatNumber(order.metadata.customAmount) :
-          order.metadata.subtotal !== null ?
-            this.formatNumber(order.metadata.subtotal) :
-            'TBD',
-        FEE: order.metadata.deliveryCharge ? this.formatNumber(order.metadata.deliveryCharge) : 'TBD',
-        TPS: order.metadata.tps !== null ? this.formatNumber(order.metadata.tps) : 'TBD',
-        TVQ: order.metadata.tvq !== null ? this.formatNumber(order.metadata.tvq) : 'TBD',
-        TAX: order.metadata.tps !== null && order.metadata.tvq !== null ? this.formatNumber(order.metadata.tps + order.metadata.tvq) : 'TBD',
-        TIP: order.metadata.tip ? order.metadata.tip : order.metadata.tipPercent ? order.metadata.tipPercent + '%' : order.metadata.tip,
-        PROMO: order.metadata.promoCode,
-        LASTFOUR: [PaymentMethods.ApplePay, PaymentMethods.PayPal].indexOf(order.metadata.paymentMethod) > -1
-          ? order.metadata.paymentMethod : '*' + order.metadata.lastFour,
-        TOTAL: order.metadata.chargedAmount !== null ? this.formatNumber(order.metadata.chargedAmount / 100) : 'TBD',
-        SHOWDRIVERPHOTO: order.metadata.driverPhoto ? true : false,
-        DRIVERPHOTO: order.metadata.driverPhoto ?
-          this.settingsService.getValue(SettingsVariablesKeys.DriversImagesHost) + order.metadata.driverPhoto : null,
-      },
-    });
+    return await this.emailSenderService
+      .sendEmailToCustomer(
+        customer.email,
+        this.getClientEmailTemplateId(order),
+        {
+          DATE: this.formatDate(new Date(order.createdAt), -4),
+          MENU: order.type,
+          PICKUP: order.metadata.pickUpAddress,
+          DROPOFF: order.metadata.dropOffAddress,
+          ITEMS: order.type === OrderType.Custom
+            ? order.metadata.description
+            : order.orderItems.reduce((res, item) => {
+              if (res) {
+                res += ' | ';
+              }
+              res += `${item.quantity} x ${item.description} $${item.price}`;
+              return res;
+            }, ''),
+          SERVICEFEE: order.metadata.serviceFee !== null ? this.formatNumber(order.metadata.serviceFee) : 'TBD',
+          SUBTOTAL: order.metadata.customAmount !== null ?
+            this.formatNumber(order.metadata.customAmount) :
+            order.metadata.subtotal !== null ?
+              this.formatNumber(order.metadata.subtotal) :
+              'TBD',
+          FEE: order.metadata.deliveryCharge ? this.formatNumber(order.metadata.deliveryCharge) : 'TBD',
+          TPS: order.metadata.tps !== null ? this.formatNumber(order.metadata.tps) : 'TBD',
+          TVQ: order.metadata.tvq !== null ? this.formatNumber(order.metadata.tvq) : 'TBD',
+          TAX: order.metadata.tps !== null && order.metadata.tvq !== null ? this.formatNumber(order.metadata.tps + order.metadata.tvq) : 'TBD',
+          TIP: order.metadata.tip ? order.metadata.tip : order.metadata.tipPercent ? order.metadata.tipPercent + '%' : order.metadata.tip,
+          PROMO: order.metadata.promoCode,
+          LASTFOUR: [PaymentMethods.ApplePay, PaymentMethods.PayPal].indexOf(order.metadata.paymentMethod) > -1
+            ? order.metadata.paymentMethod : '*' + order.metadata.lastFour,
+          TOTAL: order.metadata.chargedAmount !== null ? this.formatNumber(order.metadata.chargedAmount / 100) : 'TBD',
+          SHOWDRIVERPHOTO: order.metadata.driverPhoto ? true : false,
+          DRIVERPHOTO: order.metadata.driverPhoto ?
+            this.settingsService.getValue(SettingsVariablesKeys.DriversImagesHost) + order.metadata.driverPhoto : null,
+        },
+      );
   }
 
   private getClientEmailTemplateId(order: OrderEntity) {
@@ -111,5 +123,31 @@ export class OrdersEmailSenderService {
     return d.toISOString()
       .replace(/T/, ' ')      // replace T with a space
       .replace(/\..+/, '');
+  }
+
+  // "new templates" are all template after May 1, 2020
+  private getDataForNewTemplates(order: OrderEntity) {
+    const firstName = [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
+      order.merchant.name : order.customer.firstName;
+    const orderText = [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
+      order.metadata.deliveryInstructions : order.type === OrderType.Menu ?
+        order.orderItems.reduce((res, item) => {
+          res += `${item.quantity} x ${item.description}    $${item.price}`;
+          if (item.subOptions) {
+            res += item.subOptions.map(so => `\n    - ${so.title}    $${so.price}`).join('');
+          }
+          res += '\n';
+          return res;
+        }, '') : order.metadata.description;
+    const { dropOffAddress, pickUpAddress } = order.metadata;
+    const { id } = order;
+    return {
+      id,
+      firstName,
+      dropOffAddress,
+      pickUpAddress,
+      order: orderText,
+      createdAt: this.formatDate(new Date(order.createdAt), -4),
+    };
   }
 }

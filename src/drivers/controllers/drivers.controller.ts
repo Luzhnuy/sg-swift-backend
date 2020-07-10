@@ -129,14 +129,6 @@ export class DriversController extends CrudController {
       if (!driver.user) {
         driver.user = currentEntity.user;
       }
-      // if (driver.user.id) {
-      //   driver.user = await this.usersService
-      //     .updateUser(driver.user);
-      // } else {
-      //   // driver.user = currentEntity.user;
-      //   driver.user = await this.usersService
-      //     .createUser(driver.user);
-      // }
       driver.userId = driver.user.id;
       if (!driver.user.isActive && driver.status.isOnline) {
         driver.status.isOnline = false;

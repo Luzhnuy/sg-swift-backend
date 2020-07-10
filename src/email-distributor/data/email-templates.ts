@@ -8,4 +8,9 @@ export enum EmailTemplates {
   MerchantRegistration = 'd-94d5f013a04846e39c681685f6b2ff68',
   MerchantNewBookingOrder = 'd-105a5e8ebd00499cb6af7715c953cc4e',
 
+  CustomerOrderConfirmation = 'd-0c25f29542954ca997e90679d089fc82',
+
+  AllCancelOrder = 'd-0c25f29542954ca997e90679d089fc82',
+  AllConfirmOrder = 'd-18f0f90ab9e740e690c6eacb358e53d9',
+
 }

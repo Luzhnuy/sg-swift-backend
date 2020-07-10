@@ -49,7 +49,6 @@ export class CrudController {
       entity.authorId = null;
       entity.moderatorId = null;
     }
-    // const validateResult = await entity.validate();
     const validateResult = true;
     if (validateResult === true) {
       return await this.repository.save(entity);
@@ -76,10 +75,14 @@ export class CrudController {
     newEntity.authorId = currentEntity.authorId;
     newEntity.moderatorId = user.id;
     Object.assign(currentEntity, newEntity);
-    // const validateResult = await currentEntity.validate();
     const validateResult = true;
     if (validateResult === true) {
-      return await this.repository.save(currentEntity);
+      try {
+        const test =  await this.repository.save(currentEntity);
+        return test;
+      } catch (e) {
+        console.error(e);
+      }
     } else {
       throw new UnprocessableEntityException(validateResult);
     }
@@ -133,6 +136,11 @@ export class CrudController {
       if (permissions.viewAll) {
         if (!permissions.viewUnpublished) {
           where.isPublished = true;
+          if (permissions.viewOwn) {
+            entityFn.ownerFields.forEach((field: string) => {
+              where[field] = user.id;
+            });
+          }
         }
       } else {
         entityFn.ownerFields.forEach((field: string) => {

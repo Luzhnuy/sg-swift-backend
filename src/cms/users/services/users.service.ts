@@ -100,7 +100,6 @@ export class UsersService {
 
   @SanitizeUser(null, false)
   async loginUser(username: string, password: string): Promise<UserEntity> {
-
     const throwDelayedError = (message) => {
       const delay = interval(3000);
       return delay
@@ -318,8 +317,7 @@ export class UsersService {
 
   @SanitizeUser()
   async changePasswordForce(userId: number, newPassword: string) {
-    let tempUser = new UserEntity({ id: userId });
-    tempUser = await this.usersRepository.findOne(tempUser);
+    const tempUser = await this.usersRepository.findOne(userId);
     if (tempUser) {
       tempUser.password = newPassword;
       return await this.usersRepository.save(tempUser);

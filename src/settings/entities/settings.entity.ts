@@ -12,7 +12,7 @@ export class SettingsEntity {
   @Column('text', { nullable: true, default: null })
   comment: string;
 
-  @Column('bool', { default: false })
+  @Column('boolean', { default: false })
   isDefault: boolean;
 
   constructor(data: Partial<SettingsEntity>) {

@@ -174,6 +174,7 @@ export class UsersController {
           NEWPASS: newPass,
         },
       });
+      return { success: true };
     } else {
       throw new BadRequestException();
     }

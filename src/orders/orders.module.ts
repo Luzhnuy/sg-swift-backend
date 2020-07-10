@@ -1,5 +1,5 @@
 import { HttpModule, MiddlewareConsumer, Module } from '@nestjs/common';
-import { OrdersController } from './orders.controller';
+import { OrdersController } from './controllers/orders.controller';
 import { CmsModule } from '../cms/cms.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrderEntity } from './entities/order.entity';
@@ -23,12 +23,16 @@ import { GeocoderModule } from '../geocoder/geocoder.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { CustomersModule } from '../customers/customers.module';
 import { PromoCodesModule } from '../promo-codes/promo-codes.module';
-import { ElasticsearchModule } from '@nestjs/elasticsearch';
 import { OrdersPushNotificationService } from './services/orders-push-notification.service';
 import { OrdersEmailSenderService } from './services/orders-email-sender.service';
 import { OrdersPriceCalculatorService } from './services/orders-price-calculator.service';
 import { OrdersOldService } from './services/orders-old.service';
 import { OrdersReportsService } from './services/orders-reports.service';
+import { EmailDistributorModule } from '../email-distributor/email-distributor.module';
+import { SchedulerModule } from '../scheduler/scheduler.module';
+import { PriceCalculatorController } from './controllers/price-calculator.controller';
+import { PriceCalculatorConstantEntity } from './entities/price-calculator-constant.entity';
+import { MenuSubOptionEntity } from '../merchants/entities/menu-sub-option.entity';
 
 @Module({
   imports: [
@@ -52,6 +56,8 @@ import { OrdersReportsService } from './services/orders-reports.service';
       OrderItemEntity,
       OrderMetadataEntity,
       OrderDeliveredToEntity,
+      PriceCalculatorConstantEntity,
+      MenuSubOptionEntity,
     ]),
     OneSignalModule.forRootAsync({
       inject: [SettingsService],
@@ -67,6 +73,7 @@ import { OrdersReportsService } from './services/orders-reports.service';
         return subj.toPromise();
       },
     }),
+    EmailDistributorModule,
     DriversModule,
     MerchantsModule,
     CustomersModule,
@@ -75,9 +82,11 @@ import { OrdersReportsService } from './services/orders-reports.service';
     GeocoderModule,
     PaymentsModule,
     PromoCodesModule,
+    SchedulerModule,
   ],
   controllers: [
     OrdersController,
+    PriceCalculatorController,
   ],
   providers: [
     OrdersConfig,

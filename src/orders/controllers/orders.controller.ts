@@ -1,7 +1,8 @@
 import {
   Body,
   ConflictException,
-  Controller, Delete,
+  Controller,
+  Delete,
   Get,
   Header,
   HttpService,
@@ -9,48 +10,54 @@ import {
   Param,
   Post,
   Put,
-  Query,
+  Query, Res,
   UnauthorizedException,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { CrudController } from '../cms/content/controllers/crud-controller';
-import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
-import { RolesAndPermissionsService } from '../cms/roles-and-permissions/services/roles-and-permissions.service';
-import { ContentPermissionHelper, ContentPermissionsKeys } from '../cms/roles-and-permissions/misc/content-permission-helper';
-import { CrudEntity } from '../cms/content/decorators/crud-controller.decorator';
-import { OrderEntity, OrderSource, OrderStatus, OrderType } from './entities/order.entity';
+import { CrudController } from '../../cms/content/controllers/crud-controller';
+import { Brackets, In, Repository, SelectQueryBuilder } from 'typeorm';
+import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
+import { ContentPermissionHelper, ContentPermissionsKeys } from '../../cms/roles-and-permissions/misc/content-permission-helper';
+import { CrudEntity } from '../../cms/content/decorators/crud-controller.decorator';
+import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from '../cms/users/decorators/user.decorator';
-import { UserEntity } from '../cms/users/entities/user.entity';
-import { ContentEntityParam } from '../cms/content/decorators/content-entity-param.decorator';
-import { PermissionsGuard } from '../cms/roles-and-permissions/guards/permissions.guard';
-import { PermissionKeys } from './providers/orders-config';
-import { ContentEntityNotFoundGuard } from '../cms/content/guards/content-entity-not-found.guard';
-import { OrdersService } from './services/orders.service';
-import { ContentPermissionsGuard } from '../cms/content/guards/content-permissions.guard';
-import { ContentEntity } from '../cms/content/entities/content.entity';
-import { OrderDeliveredToEntity } from './entities/order-delivered-to.entity';
-import { GetswiftDelivery } from './data/getswift-delivery';
-import { OrderItemEntity } from './entities/order-item.entity';
+import { User } from '../../cms/users/decorators/user.decorator';
+import { UserEntity } from '../../cms/users/entities/user.entity';
+import { ContentEntityParam } from '../../cms/content/decorators/content-entity-param.decorator';
+import { PermissionsGuard } from '../../cms/roles-and-permissions/guards/permissions.guard';
+import { PermissionKeys } from '../providers/orders-config';
+import { ContentEntityNotFoundGuard } from '../../cms/content/guards/content-entity-not-found.guard';
+import { OrdersService } from '../services/orders.service';
+import { ContentPermissionsGuard } from '../../cms/content/guards/content-permissions.guard';
+import { ContentEntity } from '../../cms/content/entities/content.entity';
+import { OrderDeliveredToEntity } from '../entities/order-delivered-to.entity';
+import { GetswiftDelivery } from '../data/getswift-delivery';
+import { OrderItemEntity } from '../entities/order-item.entity';
 import * as fs from 'fs';
-import { OrderMetadataEntity } from './entities/order-metadata.entity';
-import { HistoryOrder } from './data/history-order';
-import { DriversService } from '../drivers/services/drivers.service';
-import { DriverProfileEntity } from '../drivers/entities/driver-profile.entity';
-import { SettingsService } from '../settings/services/settings.service';
-import { MerchantsService } from '../merchants/services/merchants.service';
-import { UsersService } from '../cms/users/services/users.service';
-import { CustomersService } from '../customers/services/customers.service';
-import { PromoCodesService } from '../promo-codes/promo-codes.service';
-import { OrdersPushNotificationService } from './services/orders-push-notification.service';
-import { OrdersEmailSenderService } from './services/orders-email-sender.service';
-import { OrdersOldService } from './services/orders-old.service';
-import { OrderPrepareRequestData } from './data/misc';
-import { OrdersReportsService } from './services/orders-reports.service';
-import { SchedulerService } from '../scheduler/services/scheduler.service';
-import { OrdersScheduledTasksKeys } from './data/scheduled-tasks-keys';
-import { PaymentsStripeService } from '../payments/services/payments-stripe.service';
+import { OrderMetadataEntity, PaymentMethods } from '../entities/order-metadata.entity';
+import { HistoryOrder } from '../data/history-order';
+import { DriversService } from '../../drivers/services/drivers.service';
+import { DriverProfileEntity } from '../../drivers/entities/driver-profile.entity';
+import { SettingsService } from '../../settings/services/settings.service';
+import { MerchantsService } from '../../merchants/services/merchants.service';
+import { UsersService } from '../../cms/users/services/users.service';
+import { CustomersService } from '../../customers/services/customers.service';
+import { PromoCodesService } from '../../promo-codes/promo-codes.service';
+import { OrdersPushNotificationService } from '../services/orders-push-notification.service';
+import { OrdersEmailSenderService } from '../services/orders-email-sender.service';
+import { OrdersOldService } from '../services/orders-old.service';
+import { OrderPrepareRequestData } from '../data/misc';
+import { OrdersReportsService } from '../services/orders-reports.service';
+import { SchedulerService } from '../../scheduler/services/scheduler.service';
+import { OrdersScheduledTasksKeys } from '../data/scheduled-tasks-keys';
+import { PaymentsStripeService } from '../../payments/services/payments-stripe.service';
+import { timer } from 'rxjs';
+import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.entity';
+import { Readable } from 'stream';
+import { Response } from 'express';
+import { createReadStream } from 'fs';
+import { MerchantsRolesName } from '../../merchants/services/merchants-config.service';
 
 interface SearchQuery {
   customerId?: string | number;
@@ -63,6 +70,7 @@ interface SearchQuery {
   page?: number;
   types?: OrderType[] | string | string[];
   token?: string; // for one-time-token
+  timezoneOffset?: string;
 }
 
 @Controller('orders')
@@ -73,6 +81,7 @@ export class OrdersController extends CrudController {
     @InjectRepository(OrderEntity) protected readonly repository: Repository<OrderEntity>,
     @InjectRepository(OrderMetadataEntity) protected readonly repositoryMetadata: Repository<OrderMetadataEntity>,
     @InjectRepository(OrderItemEntity) protected readonly repositoryOrdersItems: Repository<OrderItemEntity>,
+    @InjectRepository(MenuSubOptionEntity) protected readonly repositorySubOptions: Repository<MenuSubOptionEntity>,
     protected rolesAndPermissions: RolesAndPermissionsService,
     protected contentPermissionsHelper: ContentPermissionHelper,
     private ordersService: OrdersService,
@@ -98,10 +107,9 @@ export class OrdersController extends CrudController {
     const order = await this.repository.findOne({
       order: { id: 'DESC' },
     });
-    this.pushNotificationService
+    return this.pushNotificationService
       // .sendNotificationToCustomers(order);
       .sendNotificationToDrivers(order.id);
-    return true;
   }
 
   @Get('')
@@ -167,11 +175,74 @@ export class OrdersController extends CrudController {
     return this.repository.save(order);
   }
 
+  @Post(':id/extra-tip')
+  @UseGuards(ContentEntityNotFoundGuard)
+  async createExtraTip(
+    @ContentEntityParam() order: OrderEntity,
+    @User() user: UserEntity,
+    @Body() body: { extraTip: number; extraTipPercent: number, paymentMethod: PaymentMethods, extraTipChargeId: string },
+  ) {
+    if (body.extraTipPercent) {
+      const extraTipPercent = body.extraTipPercent / 100;
+      order.metadata.tip = order.metadata.totalAmount * extraTipPercent;
+      order.metadata.tipPercent = extraTipPercent;
+    } else if (body.extraTip) {
+      order.metadata.tip = parseFloat(body.extraTip.toString());
+    }
+    if (order.metadata.tip) {
+      if (body.paymentMethod === PaymentMethods.Stripe) {
+        const amount = Math.round(order.metadata.tip * 100);
+        const card = await this.paymentsStripeService
+          .getCardByUser(user);
+        if (!card) {
+          throw new UnprocessableEntityException('Payment card not found');
+        }
+        const res = await this.ordersService
+          .payExtraTipStripe(order, amount, card);
+        order.metadata.tipChargedAmount = amount;
+        order.metadata.tipChargeId = res.id;
+      } else if (body.paymentMethod === PaymentMethods.ApplePay
+        || body.paymentMethod === PaymentMethods.PayPal) {
+        order.metadata.tipChargeId = body.extraTipChargeId;
+      } else {
+        throw new UnprocessableEntityException('Cannot charge tip');
+      }
+      order.metadata.totalAmount += order.metadata.tip;
+      await this.repositoryMetadata.save(order.metadata);
+      return { success: true };
+    }
+    return { success: false };
+  }
+
+  @Post(':id/rate')
+  @UseGuards(PermissionsGuard(() => PermissionKeys.AllowRateOwnOrder))
+  @UseGuards(ContentEntityNotFoundGuard)
+  async rateOrder(
+    @ContentEntityParam() order: OrderEntity,
+    @User() user: UserEntity,
+    @Body() body: { rate: number; feedback: string },
+  ) {
+    if (order.customer.userId !== user.id) {
+      throw new UnauthorizedException('You cannot rate this order');
+    }
+    const rate = body.rate ? parseInt(body.rate.toString(), 10) : null;
+    if (rate !== null && (isNaN(rate) || rate < 1 || rate > 5)) {
+      throw new UnprocessableEntityException('Rate can be 1..5');
+    }
+    order.metadata.rate = rate;
+    const feedback = body.feedback ? body.feedback.toString().substr(0, 512) : null;
+    order.metadata.feedback = feedback;
+    order.metadata.rated = true;
+    await this.repositoryMetadata.save(order.metadata);
+    return { success: true };
+  }
+
   @Post('')
   @UseGuards(ContentPermissionsGuard(isOwner => ContentPermissionsKeys[ContentPermissionsKeys.ContentAdd]))
   async createContentEntity(@Body() entity: OrderEntity, @User() user: UserEntity) {
     switch (entity.type) {
       case OrderType.Booking:
+      case OrderType.Trip:
         await this.setMerchantToOrder(entity, user);
         break;
       case OrderType.Custom:
@@ -227,15 +298,23 @@ export class OrdersController extends CrudController {
         }
       }
     }
-    switch (order.type) {
-      case OrderType.Booking:
-        this.emailSenderService
-          .sendReceiptBooking(order);
-        break;
-      default:
-        this.emailSenderService
-          .sendReceiptCustomer(order);
+    try {
+      switch (order.type) {
+        case OrderType.Booking:
+        case OrderType.Trip:
+        case OrderType.Menu:
+          await this.emailSenderService
+            .sendConfirmationEmail(order);
+          break;
+        case OrderType.Custom:
+          await this.emailSenderService
+            .sendReceiptCustomer(order);
+          break;
+      }
+    } catch (e) {
+      console.log(e);
     }
+
     this.ordersService.emitOrderUpdate({
       eventName: 'created',
       updateData: order,
@@ -256,7 +335,7 @@ export class OrdersController extends CrudController {
     if (!merchant) {
       throw new UnauthorizedException('You cannot create "Booking" orders');
     }
-    if (entity.type === OrderType.Booking && !merchant.enableBooking) {
+    if ([OrderType.Booking, OrderType.Trip ].indexOf(entity.type) > -1 && !merchant.enableBooking) {
       throw new UnprocessableEntityException('Your Bookings service is disabled. Contact SnapGrab for more information.');
     } else if (entity.type === OrderType.Menu && !merchant.enableMenu) {
       throw new UnprocessableEntityException('Menu service is disabled. Contact SnapGrab for more information.');
@@ -276,8 +355,10 @@ export class OrdersController extends CrudController {
     const customer = await this.customersService.get(customerWhere);
     if (!customer) {
       throw new UnauthorizedException('Customer hasn\'t payment card');
-    } else if (customer.metadata.debtAmount) {
-      throw new UnprocessableEntityException('User already has debt. Please, pay Your Debt!');
+    }
+    const debtAmount = await this.ordersService.getCustomerDebt(entity.customerId);
+    if (debtAmount) {
+      throw new UnprocessableEntityException('User already has debt. Please, pay the Debt!');
     }
     entity.customer = customer;
     entity.customerId = customer.id;
@@ -387,15 +468,55 @@ export class OrdersController extends CrudController {
           let retOrder = await this.ordersService
             .updateOrderStatus(order, status, driverProfileId, deliveredTo);
           retOrder = await this.repository.findOne(retOrder.id);
-          if (retOrder.type === OrderType.Custom) {
-            this.emailSenderService.sendReceiptCustomer(retOrder);
+          try {
+            switch (retOrder.type) {
+              case OrderType.Booking:
+              case OrderType.Trip:
+                await this.emailSenderService.sendReceiptBooking(retOrder);
+                break;
+              case OrderType.Custom:
+              case OrderType.Menu:
+                await this.emailSenderService.sendReceiptCustomer(retOrder);
+                break;
+            }
+          } catch (e) {
+            console.log(e);
           }
           return retOrder;
         } catch (e) {
-          // TODO cancel order
           throw new UnprocessableEntityException(e.toString());
         }
       } else if (status === OrderStatus.Cancelled) {
+        try {
+          if (order.type === OrderType.Menu) {
+            const subOptionsIds = order.orderItems
+              .reduce((res: number[], oi) => {
+                if (oi.subOptionIds && oi.subOptionIds.length) {
+                  return [ ...res, ...oi.subOptionIds];
+                }
+                return res;
+              }, []);
+            if (subOptionsIds.length) {
+              const subOptions = await this.repositorySubOptions
+                .find({
+                  where: {
+                    id: In(subOptionsIds),
+                  },
+                });
+              order.orderItems
+                .forEach(oi => {
+                  if (oi.subOptionIds) {
+                    oi.subOptions = oi.subOptionIds
+                      .map(soId => subOptions.find(so => so.id === soId));
+                  }
+                });
+            }
+          }
+          await this.emailSenderService
+            .sendCancelOrderEmail(order);
+        } catch (e) {
+          console.log(e);
+        }
         return await this.ordersService.updateOrderStatus(order, status,
           undefined, undefined, undefined,
           cancellationReason, false,
@@ -407,6 +528,18 @@ export class OrdersController extends CrudController {
       console.error(e);
       throw e;
     }
+  }
+
+  @Get('customer/:customerId/debt')
+  async getCustomerDebt(
+    @User() user: UserEntity,
+    @Param('customerId') customerId: string,
+  ) {
+    const debtAmount = await this.ordersService
+      .getCustomerDebt(
+        parseInt(customerId, 10),
+      );
+    return { debtAmount };
   }
 
   @Get('pay-debt')
@@ -440,7 +573,16 @@ export class OrdersController extends CrudController {
       .getTasksByKey(OrdersScheduledTasksKeys.ChargeDebt);
     for (const task of tasks) {
       if (task.data === orderId) {
-        return await this.schedulerService.runTask(task);
+        await this.schedulerService.runTask(task);
+        await timer(10000)
+          .toPromise();
+        const newTask = await this.schedulerService
+          .getById(task.id);
+        if (newTask) {
+          throw new UnprocessableEntityException('Debt wasn\'t charged');
+        } else {
+          return { success: true };
+        }
       }
     }
     // if task wasn't found try to pay debt without task
@@ -464,11 +606,6 @@ export class OrdersController extends CrudController {
     @Param('id') orderId: string,
     @ContentEntityParam() order: OrderEntity,
   ) {
-    const customer = await this.customersService.get({ id: order.customerId });
-    if (customer) {
-      customer.metadata.debtAmount -= order.metadata.debtAmount;
-      await this.customersService.saveMetadata(customer.metadata);
-    }
     order.metadata.debtAmount = null;
     await this.repository.save(order);
     const tasks = await this.schedulerService
@@ -504,6 +641,7 @@ export class OrdersController extends CrudController {
           order = await this.oldService.convertCustomDataToOrder(data);
           break;
         case OrderType.Booking:
+        case OrderType.Trip:
         default:
           order = await this.oldService.convertBookingDataToOrder(data);
           break;
@@ -641,12 +779,52 @@ export class OrdersController extends CrudController {
   @Header('content-type', 'application/octet-stream')
   @Header('content-disposition', 'attachment; filename="orders-reports.csv"')
   async sendReport(@Query() query: SearchQuery) {
+    delete query.timezoneOffset;
     const payload = this.usersService.decodeAuthToken(query.token);
     const user = await this.usersService.getUserOneTimeAuth(payload);
     delete query.token;
     const builder = await this.getQueryBuilder(user, query);
+    builder.innerJoinAndSelect('entity.merchant', 'merchant');
     const orders = await builder.getMany();
-    return this.reportsService.convertOrdersToCSV(orders);
+    if (user.roles.find(role => role.name === MerchantsRolesName.Merchant)) {
+      return this.reportsService.convertOrdersToCSVForMerchants(orders);
+    } else {
+      return this.reportsService.convertOrdersToCSV(orders);
+    }
+  }
+
+  @Get('invoice')
+  @Header('Content-Type', 'application/pdf')
+  @Header('content-disposition', 'attachment; filename="earning-invoice.pdf"')
+  async sendInvoice(
+    @Query() query: SearchQuery,
+    @Res() res: Response,
+  ) {
+    const [ startDate, endDate ] = (query.range as string).split(',').map(dateStr => new Date(dateStr));
+    const payload = this.usersService.decodeAuthToken(query.token);
+    const user = await this.usersService.getUserOneTimeAuth(payload);
+    delete query.token;
+    const timezoneOffset = query.timezoneOffset ? parseInt(query.timezoneOffset, 10) : 0;
+    delete query.timezoneOffset;
+    (query as any).types = OrderType.Menu;
+    const builder = await this.getQueryBuilder(user, query);
+    builder.innerJoin('entity.merchant', 'merchant');
+    builder.innerJoin('merchant.departments', 'departments');
+    builder.select('SUM(metadata.subtotal)', 'subtotal');
+    builder.addSelect('SUM(metadata.tps)', 'tps');
+    builder.addSelect('SUM(metadata.tvq)', 'tvq');
+    builder.addSelect('SUM(metadata.chargedAmount)', 'chargedAmount');
+    builder.addSelect('merchant.commission', 'commission');
+    builder.addSelect('merchant.name', 'name');
+    builder.addSelect('departments.address', 'address');
+    builder.groupBy('departments.id');
+    const { name, commission, address, subtotal, tps, tvq, chargedAmount } = await builder.getRawOne();
+    const stream: any = await this.reportsService
+      .convertToInvoicePdf(
+        { name, commission, address, subtotal, tps, tvq, chargedAmount },
+        startDate, endDate, timezoneOffset,
+      );
+    stream.pipe(res);
   }
 
   @Get('send-receipt/:id')
@@ -661,15 +839,21 @@ export class OrdersController extends CrudController {
   private async sendReceipt(
     @ContentEntityParam() order: OrderEntity,
   ) {
-    switch (order.type) {
-      case OrderType.Booking:
-        this.emailSenderService
-          .sendReceiptBooking(order);
-        break;
-      default:
-        this.emailSenderService
-          .sendReceiptCustomer(order);
+    try {
+      switch (order.type) {
+        case OrderType.Booking:
+        case OrderType.Trip:
+          await this.emailSenderService
+            .sendReceiptBooking(order);
+          break;
+        default:
+          await this.emailSenderService
+            .sendReceiptCustomer(order);
+      }
+    } catch (e) {
+      console.log(e);
     }
+    return;
   }
 
   @Get('send-receipt-anonymous/:id')
@@ -677,15 +861,21 @@ export class OrdersController extends CrudController {
   private async sendReceiptAnonymous(
     @ContentEntityParam() order: OrderEntity,
   ) {
-    switch (order.type) {
-      case OrderType.Booking:
-        this.emailSenderService
-          .sendReceiptBooking(order);
-        break;
-      default:
-        this.emailSenderService
-          .sendReceiptCustomer(order);
+    try {
+      switch (order.type) {
+        case OrderType.Booking:
+        case OrderType.Trip:
+          await this.emailSenderService
+            .sendReceiptBooking(order);
+          break;
+        default:
+          await this.emailSenderService
+            .sendReceiptCustomer(order);
+      }
+    } catch (e) {
+      console.log(e);
     }
+    return;
   }
 
   @Post('cancel-delivery-anonymous')

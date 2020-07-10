@@ -2,6 +2,7 @@ import { HttpService, Injectable, UnprocessableEntityException } from '@nestjs/c
 import { SettingsService } from '../../settings/services/settings.service';
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { Subject } from 'rxjs';
+import { Environment } from '../../environment';
 
 @Injectable()
 export class PaymentsPayPalService {
@@ -21,12 +22,10 @@ export class PaymentsPayPalService {
     const token = await this.getTokenObj();
     let link: string;
     if (data && data.amount && data.amount.total && data.amount.total !== '0.00') {
-      // link = `https://api.paypal.com/v1/payments/authorization/$id/capture`;
-      link = `https://api.sandbox.paypal.com/v1/payments/authorization/${chargeId}/capture`;
+      link = this.getApiUrl(`v1/payments/authorization/${chargeId}/capture`);
     } else {
       data = null;
-      // link =  `https://api.paypal.com/v1/payments/authorization/${chargeId}/void`;
-      link =  `https://api.sandbox.paypal.com/v1/payments/authorization/${chargeId}/void`;
+      link = this.getApiUrl(`v1/payments/authorization/${chargeId}/void`);
     }
     const subj = new Subject<null>();
     this.httpService
@@ -55,8 +54,7 @@ export class PaymentsPayPalService {
   }
 
   private async getTokenObj() {
-    const link = 'https://api.sandbox.paypal.com/v1/oauth2/token';
-    // const link = 'https://api.paypal.com/v1/oauth2/token';
+    const link = this.getApiUrl('v1/oauth2/token');
     const subj = new Subject<{
       accessToken: string,
       tokenType: string,
@@ -90,6 +88,14 @@ export class PaymentsPayPalService {
       });
 
     return await subj.asObservable().toPromise();
+  }
+
+  private getApiUrl(path: string) {
+    if (this.settingsService.getValue(SettingsVariablesKeys.Environment) === 'production') {
+      return `https://api.paypal.com/${path}`;
+    } else {
+      return `https://api.sandbox.paypal.com/${path}`;
+    }
   }
 
 }

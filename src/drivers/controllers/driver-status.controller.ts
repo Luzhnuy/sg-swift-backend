@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Put, Query, UnprocessableEntityException, UseGuards, Headers, Get, Param } from '@nestjs/common';
+import { Body, Controller, Post, Put, UseGuards, Headers, Get, Param } from '@nestjs/common';
 import { CrudEntity } from '../../cms/content/decorators/crud-controller.decorator';
 import { CrudController } from '../../cms/content/controllers/crud-controller';
 import { DriverStatusEntity } from '../entities/driver-status.entity';

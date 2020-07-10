@@ -1,5 +1,5 @@
 import { HttpService, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
 import { ReplaySubject, Subject } from 'rxjs';
@@ -16,6 +16,12 @@ import { OrdersPushNotificationService } from './orders-push-notification.servic
 import { OrderPrepareRequestData } from '../data/misc';
 import { OrdersPriceCalculatorService } from './orders-price-calculator.service';
 import { OrdersOldService } from './orders-old.service';
+import { SchedulerTaskEntity } from '../../scheduler/entities/scheduler-task.entity';
+import { OrdersScheduledTasksKeys } from '../data/scheduled-tasks-keys';
+import { SchedulerService } from '../../scheduler/services/scheduler.service';
+import { PaymentCardEntity } from '../../payments/entities/payment-card.entity';
+import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
+import { SettingsService } from '../../settings/services/settings.service';
 
 @Injectable()
 export class OrdersService {
@@ -39,7 +45,41 @@ export class OrdersService {
     private pushNotificationService: OrdersPushNotificationService,
     private priceCalculatorService: OrdersPriceCalculatorService,
     private oldService: OrdersOldService,
-  ) {}
+    private schedulerService: SchedulerService,
+    private settingsService: SettingsService,
+  ) {
+    this.schedulerService
+      .getThread(OrdersScheduledTasksKeys.ChargeDebt)
+      .subscribe(async (task) => {
+        const order = await this.repository.findOne(task.data);
+        if (order) {
+          if (order.metadata.debtAmount) {
+            const customer = await this.customersService.get({ id: order.customerId });
+            if (customer) {
+              const card = await this.paymentsStripeService
+                .getCardByUser(customer.userId);
+              if (card) {
+                try {
+                  await this.payOrderDebt(order, card);
+                  await this.schedulerService.removeTask(task);
+                } catch (e) {
+                  console.log(`Order "${task.data}" wasn't charged, when trying to charge debt automatically.`);
+                  console.error(e);
+                }
+              } else {
+                console.log(`Order "${task.data}" wasn't charged, because customer still hasn't card`);
+              }
+            }
+          } else {
+            await this.schedulerService.removeTask(task);
+            console.log(`Debt for order "${task.data}" is already charged, when trying to charge debt automatically`);
+          }
+        } else {
+          await this.schedulerService.removeTask(task);
+          console.error(`order "${task.data}" not found, when trying to charge debt automatically`);
+        }
+      });
+  }
 
   public async updateOrderStatus(
     order: OrderEntity,
@@ -53,7 +93,12 @@ export class OrdersService {
   ) {
     order.status = status;
     if (typeof driverProfileId !== 'undefined') {
-      order.driverProfile = await this.driversService.getSingle(driverProfileId);
+      if (driverProfileId === null) {
+        order.driverProfileId = null;
+        delete order.driverProfile;
+      } else {
+        order.driverProfile = await this.driversService.getSingle(driverProfileId);
+      }
     }
     if (typeof customAmount !== 'undefined') {
       order.metadata.customAmount = customAmount;
@@ -66,9 +111,13 @@ export class OrdersService {
         order.status === OrderStatus.Completed
       ) {
         if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
-          await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, order.metadata.chargedAmount);
-          if (order.metadata.chargeId2) {
-            await this.paymentsStripeService.chargeAmount(order.metadata.chargeId2, order.metadata.chargedAmount2 || order.metadata.chargedAmount);
+          try {
+            await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, order.metadata.chargedAmount);
+            if (order.metadata.chargeId2) {
+              await this.paymentsStripeService.chargeAmount(order.metadata.chargeId2, order.metadata.chargedAmount2 || order.metadata.chargedAmount);
+            }
+          } catch (e) {
+            console.error(e);
           }
         } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
           const chargeId = order.metadata.chargeId.split('-----')[1];
@@ -140,7 +189,6 @@ export class OrdersService {
         console.error(e);
       }
     }
-
     this.emitOrderUpdate({
       eventName: 'status-changed',
       updateData: {
@@ -166,10 +214,20 @@ export class OrdersService {
     this.$$ordersUpdates.next(event.updateData);
     if (['status-changed', 'created'].indexOf(event.eventName) > -1) {
       if (event.eventName === 'created') {
-        this.pushNotificationService.sendNotificationToDrivers(event.updateData.id);
+        const scheduledAt = new Date(event.updateData.scheduledAt);
+        const now = new Date();
+        if (scheduledAt.getTime() - 30 * 60 * 1000 > now.getTime()) {
+          this.pushNotificationService.sendDelayedNotificationToDrivers(event.updateData as OrderEntity);
+        } else {
+          this.pushNotificationService.sendNotificationToDrivers(event.updateData.id);
+        }
+
       }
       const order = await this.repository.findOne(event.updateData.id);
-      if (order.type !== OrderType.Booking) {
+      if (event.eventName === 'created' && order.type === OrderType.Menu) {
+        this.pushNotificationService.sendNotificationToMerchant(order);
+      }
+      if ([OrderType.Booking, OrderType.Trip].indexOf(order.type) === -1) {
         this.pushNotificationService.sendNotificationToCustomers(order);
         this.oldService.emulateGetSwiftHooks(order);
       }
@@ -185,12 +243,80 @@ export class OrdersService {
       .getCount();
   }
 
+  public async bookOrder(order: OrderEntity) {
+    const data = this.getPrepareRequestData(order);
+    const prices = await this.prepareOrder(data);
+    this.setPricesToOrder(order, prices);
+    if (!order.metadata.paymentMethod || order.metadata.paymentMethod === PaymentMethods.Stripe) {
+      const cardUserId = [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
+        order.merchant.userId : order.customer.userId;
+      order = await this.makeStripePayment(order, cardUserId);
+    } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
+      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+    } else if (order.metadata.paymentMethod === PaymentMethods.ApplePay) {
+      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+    }
+    return order;
+  }
+
+  public async payUserDebt(userId) {
+    const customer = await this.customersService.get({ userId });
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+    const card = await this.paymentsStripeService
+      .getCardByUser(userId);
+    if (!card) {
+      throw new NotFoundException('You do not have a payment card. Add one now');
+    }
+    const orders = await this.repository
+      .createQueryBuilder('order')
+      .where('customerId = :customerId', { customerId: customer.id })
+      .innerJoinAndSelect('order.metadata', 'metadata')
+      .andWhere('metadata.debtAmount > 0')
+      .getMany();
+    if (orders.length) {
+      for (const order of orders) {
+        await this.payOrderDebt(order, card);
+      }
+    }
+  }
+
+  public async payExtraTipStripe(order: OrderEntity, amount: number, card: PaymentCardEntity) {
+    return this.paymentsStripeService.makePayment(
+      card.customerId,
+      Math.round(amount),
+      true,
+      `Tip for oder #${order.id}`,
+    );
+  }
+
+  public async payOrderDebt(order, card) {
+    const res = await this.paymentsStripeService.makePayment(
+      card.customerId,
+      order.metadata.debtAmount,
+      true,
+      order.metadata.description,
+    );
+    const orderDebt = order.metadata.debtAmount;
+    order.metadata.chargeId2 = res.id;
+    order.metadata.chargedAmount2 = orderDebt;
+    order.metadata.debtAmount = 0;
+    await this.repositoryMetadata.save(order.metadata);
+    return orderDebt;
+  }
+
+  public async prepareOrder(data: OrderPrepareRequestData) {
+    if (data.origin && data.destination) {
+      data.distance = await this.geocoderService.getDistance( data.origin, data.destination );
+    }
+    return this.priceCalculatorService.prepareOrder(data);
+  }
+
   private async chargeCustomOrder(order: OrderEntity) {
     const data = this.getPrepareRequestData(order);
     const prices = await this.prepareOrder(data);
-
     this.setPricesToOrder(order, prices);
-    const subj = new ReplaySubject(1);
     let res;
     const desiredChargedAmount = Math.round(order.metadata.totalAmount * 100);
     if (desiredChargedAmount > 5000) {
@@ -211,63 +337,16 @@ export class OrdersService {
           await this.stripeClient.refunds.create({ charge: order.metadata.chargeId });
           order.metadata.chargeId = res.id;
           order.metadata.chargedAmount = desiredChargedAmount;
-          subj.next(res);
         } else {
           throw new Error('Card not found');
         }
       } catch (e) {
         await this.addDebt(order, deptAmount);
-      } finally {
-        subj.complete();
       }
+    } else {
+      order.metadata.chargedAmount = desiredChargedAmount;
     }
     return res;
-  }
-
-  public async bookOrder(order: OrderEntity) {
-    const data = this.getPrepareRequestData(order);
-    const prices = await this.prepareOrder(data);
-    this.setPricesToOrder(order, prices);
-    if (order.metadata.paymentMethod === PaymentMethods.Stripe) {
-      const cardUserId = order.type === OrderType.Booking ?
-        order.merchant.userId : order.customer.userId;
-      order = await this.makeStripePayment(order, cardUserId);
-    } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
-      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
-    } else if (order.metadata.paymentMethod === PaymentMethods.ApplePay) {
-      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
-    }
-    return order;
-  }
-
-  public async payUserDebt(userId) {
-    const customer = await this.customersService.get({ userId });
-    if (!customer) {
-      throw new NotFoundException('Customer not found');
-    }
-    const orders = await this.repository
-      .createQueryBuilder('order')
-      .where('customerId = :customerId', { customerId: customer.id })
-      .innerJoinAndSelect('order.metadata', 'metadata')
-      .andWhere('metadata.debtAmount > 0')
-      .getMany();
-
-    if (orders.length) {
-      const card = await this.paymentsStripeService
-        .getCardByUser(userId);
-      for (const order of orders) {
-        const deptAmount = await this.payOrderDebt(order, card);
-        customer.metadata.debtAmount -= deptAmount;
-        await this.customersService.saveMetadata(customer.metadata);
-      }
-    }
-  }
-
-  public async prepareOrder(data: OrderPrepareRequestData) {
-    if (data.origin && data.destination) {
-      data.distance = await this.geocoderService.getDistance( data.origin, data.destination );
-    }
-    return this.priceCalculatorService.prepareOrder(data);
   }
 
   private async makeStripePayment(order: OrderEntity, userId) {
@@ -293,44 +372,38 @@ export class OrdersService {
     return order;
   }
 
-  private async addDebt(order, deptAmount) {
+  private async addDebt(order: OrderEntity, deptAmount: number) {
+    const environment = this.settingsService.getValue(SettingsVariablesKeys.Environment);
+    const interval = environment === 'production' ? 24 * 3600 : 300;
     order.metadata.debtAmount = deptAmount;
     order.metadata.chargedAmount2 = null;
-    order.customer.metadata.debtAmount = (order.customer.metadata.debtAmount || 0) + deptAmount;
-    await this.customersService
-      .saveMetadata(order.customer.metadata);
-    const tryCharge = async (orderId, userId) => {
-      const orderUptime = await this.repository.findOne(orderId);
-      const cardUptime = await this.paymentsStripeService
-        .getCardByUser(userId);
-      if (orderUptime.metadata.debtAmount) {
-        try {
-          await this.payOrderDebt(orderUptime, cardUptime);
-        } catch (e) {
-          setTimeout(() => {
-            tryCharge(orderId, userId);
-          }, 48 * 3600 * 1000);
-        }
-      }
-    };
-    setTimeout((orderId, userId) => {
-      tryCharge(orderId, userId);
-    }, 48 * 3600 * 1000, [order.id, order.customer.userId]);
+    const hasDebt = await this.getCustomerDebt(order.customerId);
+    if (hasDebt) {
+      throw new UnprocessableEntityException('User already has debt. Please, pay the Debt!');
+    }
+    const scheduledAt = new Date();
+    scheduledAt.setTime(scheduledAt.getTime() + interval * 1000);
+    const task = new SchedulerTaskEntity({
+      key: OrdersScheduledTasksKeys.ChargeDebt,
+      interval,
+      data: order.id.toString(),
+      scheduledAt,
+    });
+    try {
+      await this.schedulerService.addTask(task);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  private async payOrderDebt(order, card) {
-    const res = await this.paymentsStripeService.makePayment(
-      card.customerId,
-      order.metadata.debtAmount,
-      true,
-      order.metadata.description,
-    );
-    const orderDebt = order.metadata.debtAmount;
-    order.metadata.chargeId2 = res.id;
-    order.metadata.chargedAmount2 = orderDebt;
-    order.metadata.debtAmount = 0;
-    await this.repositoryMetadata.save(order.metadata);
-    return orderDebt;
+  public async getCustomerDebt(customerId: number) {
+    const { debtAmount }  = await this.repository
+      .createQueryBuilder('o')
+      .select('SUM(metadata.debtAmount)', 'debtAmount')
+      .leftJoin('o.metadata', 'metadata')
+      .where('o.customerId = :customerId', { customerId })
+      .getRawOne();
+    return debtAmount ? parseInt(debtAmount, 10) : 0;
   }
 
   private setPricesToOrder(order: OrderEntity, prices: OrderPrepareRequestData) {
@@ -344,6 +417,7 @@ export class OrdersService {
     order.metadata.tvq = prices.tvq;
     order.metadata.tps = prices.tps;
     order.metadata.customAmount = prices.customAmount;
+    order.metadata.deliveryCharge = prices.deliveryCharge;
   }
 
   private getPrepareRequestData(order: OrderEntity) {

@@ -26,7 +26,7 @@ function createPermissionsGuard(permissionKeyFn: (isOwner: boolean) => string): 
     async canActivate(context: ExecutionContext): Promise<boolean> {
       const request = context.switchToHttp().getRequest();
       const user = request.user;
-      const isOwner = request.contentEntity ? request.contentEntity.constructor.ownerFields
+      let isOwner = request.contentEntity ? request.contentEntity.constructor.ownerFields
         .reduce((res, field: string) => {
           const ownerId = field
             .split('.')
@@ -35,9 +35,18 @@ function createPermissionsGuard(permissionKeyFn: (isOwner: boolean) => string): 
             }, request.contentEntity);
           return res || ownerId === user.id;
         }, false) : false;
-      const permissionName = this.contentPermissionsHelper.getKeyByContentName(
-        permissionKeyFn(isOwner),
-        (context.getClass() as any).entityName);
+      if (!isOwner && [
+        'MenuOptionEntity',
+        'MenuSubOptionEntity',
+        'MenuItemOptionEntity',
+      ].indexOf((context.getClass() as any).entityName) > -1) {
+        isOwner = true;
+      }
+      const permissionName = this.contentPermissionsHelper
+        .getKeyByContentName(
+          permissionKeyFn(isOwner),
+          (context.getClass() as any).entityName,
+        );
       const permission = await this.rolesAndPermissions
         .getPermissionByKey(permissionName);
       const permissionGranted = await this.rolesAndPermissions

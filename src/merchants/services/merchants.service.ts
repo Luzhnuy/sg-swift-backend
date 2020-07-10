@@ -16,6 +16,11 @@ export class MerchantsService {
     private readonly itemsSearchService: ItemsSearchService,
   ) {}
 
+  async clearSearch() {
+    return this.itemsSearchService
+      .removeAll();
+  }
+
   async searchMenuItems(query: string) {
     return this.itemsSearchService
       .searchMenuItem(query);
@@ -24,10 +29,8 @@ export class MerchantsService {
   async migrateMenuItems(data: number[] | Partial<MenuItemEntity> = []) {
     const builder = await this.menuItemEntityRepository
       .createQueryBuilder('item')
-      .select([
-        'item.id', 'item.name', 'item.description', 'item.isPublished', 'item.isWaiting',
-        'merchant.isPublished', 'merchant.enableMenu',
-        'category.isPublished'])
+      .select(['item.id', 'item.name', 'item.description', 'item.isPublished', 'item.isWaiting',
+        'merchant.isPublished', 'merchant.enableMenu', 'category.isPublished'])
       .innerJoin('item.category', 'category')
       .innerJoin('item.merchant', 'merchant');
     if (data) {

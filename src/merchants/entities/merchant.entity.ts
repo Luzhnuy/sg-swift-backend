@@ -4,6 +4,7 @@ import { MerchantDepartmentEntity } from './merchant-department.entity';
 import { UserEntity } from '../../cms/users/entities/user.entity';
 import { MenuCategoryEntity } from './menu-category.entity';
 import { OwnerFields } from '../../cms/roles-and-permissions/decorators/owner-fields.decorator';
+import { ColumnNumericTransformer } from '../../shared/column-numeric-transformer';
 
 @Entity()
 @OwnerFields(['userId'])
@@ -59,15 +60,18 @@ export class MerchantEntity extends ContentEntity {
   @Column('boolean', { default: true })
   subscribedOnReceipt: boolean;
 
+  @Column('tinyint', {
+    default: 0,
+  })
+  commission: number;
+
   @OneToMany(type => MerchantDepartmentEntity, department => department.merchant, {
     eager: true,
-    cascade: ['update'],
   })
   departments: MerchantDepartmentEntity[];
 
   @OneToMany(type => MenuCategoryEntity, category => category.merchant, {
     lazy: true,
-    cascade: ['update'],
   })
   categories: MenuCategoryEntity[];
 

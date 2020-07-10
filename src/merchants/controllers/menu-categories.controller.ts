@@ -79,7 +79,7 @@ export class MenuCategoriesController extends CrudController {
       .leftJoinAndSelect('entity.items', 'items');
     const secureWhere = await this.getWhereRestrictionsByPermissions(user);
     if (secureWhere && secureWhere.isPublished) {
-      builder.andWhere('items.isPublished = :isPublished', { isPublished: true });
+      // builder.andWhere('items.isPublished = :isPublished', { isPublished: true });
       builder.andWhere('items.isWaiting = :isWaiting', { isWaiting: false });
       builder.innerJoinAndSelect('entity.merchant', 'merchant');
       builder.andWhere('merchant.isPublished = :isPublished', { isPublished: true });

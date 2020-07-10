@@ -37,7 +37,18 @@ export class OrdersEventsGateway implements OnGatewayDisconnect, OnGatewayConnec
     this.ordersService
       .$ordersUpdates
       .subscribe(updates => {
-        // TODO remove User from Merchant and Customer
+        if (updates.merchant) {
+          updates.merchant.user = null;
+          delete updates.merchant.user;
+        }
+        if (updates.customer) {
+          updates.customer.user = null;
+          delete updates.customer.user;
+        }
+        if (updates.driverProfile) {
+          updates.driverProfile.user = null;
+          delete updates.driverProfile.user;
+        }
         this.$$ordersEvents.next({
           event: EventName,
           data: updates,
@@ -46,11 +57,6 @@ export class OrdersEventsGateway implements OnGatewayDisconnect, OnGatewayConnec
   }
 
   @SubscribeMessage('orders-events')
-  // handleMessage(ws, data: { merchantId: number } | { customerId: number } | { driverId: number } | {
-  //   // source: 'merchant' | 'admin' | 'customer' | 'driver';
-  //   source: string;
-  //   token: string;
-  // }) {
   async handleMessage(ws, data) {
     if (!data.source) {
       return this.$$ordersEvents.asObservable();
@@ -80,6 +86,7 @@ export class OrdersEventsGateway implements OnGatewayDisconnect, OnGatewayConnec
                 subscription.unsubscribe();
               } else {
                 const isOk = keys.reduce((res, key) => {
+                  // TODO compare objects deep
                   return res && event.data[key] === searchParams[key];
                 }, true);
                 if (isOk) {

@@ -22,11 +22,12 @@ function createPermissionsGuard(permissionNameFn: (isOwner: boolean) => string):
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-
       const request = context.switchToHttp().getRequest();
       const user = request.user;
       const permission = await this.rolesAndPermissions
-        .getPermissionByKey(permissionNameFn(request.isOwner));
+        .getPermissionByKey(
+          permissionNameFn(request.isOwner),
+        );
       const permissionGranted = await this.rolesAndPermissions
         .checkPermissionByRoles(permission, user.roles);
       if (permissionGranted) {

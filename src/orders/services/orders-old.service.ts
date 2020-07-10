@@ -91,6 +91,13 @@ export class OrdersOldService {
           subj.complete();
         }
       }, (e) => subj.error(e));
+    } else {
+      setTimeout(() => {
+        subj.next({
+          id: order.metadata.chargeId,
+        });
+        subj.complete();
+      }, 100);
     }
     return subj.toPromise();
   }
@@ -242,6 +249,18 @@ export class OrdersOldService {
       metadata.lastFour = data.extra.lastFour;
     }
     order.metadata = metadata;
+    if (order.metadata.clientId) {
+      const customer = await this.customersService.get({ clientId: order.metadata.clientId });
+      if (customer) {
+        order.customerId = customer.id;
+      }
+    }
+    if (order.metadata.reference) {
+      const merchant = await this.merchantsService.get({ reference: order.metadata.reference });
+      if (merchant) {
+        order.merchantId = merchant.id;
+      }
+    }
     return order;
   }
 

@@ -10,6 +10,8 @@ import { MenuCategoryEntity } from '../../merchants/entities/menu-category.entit
 import { MenuItemEntity } from '../../merchants/entities/menu-item.entity';
 import { MerchantEntity } from '../../merchants/entities/merchant.entity';
 import { PaymentCardEntity } from '../../payments/entities/payment-card.entity';
+import { MenuOptionEntity } from '../../merchants/entities/menu-option.entity';
+import { MenuItemOptionEntity } from '../../merchants/entities/menu-item-option.entity';
 
 export enum CustomersRolesName {
   Customer = 'Customer',
@@ -53,6 +55,10 @@ export class CustomersConfig extends RolesAndPermissionsModuleConfig {
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuItemEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MerchantEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MerchantEntity.name, CustomersRolesName.Customer);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuOptionEntity.name, CustomersRolesName.Customer);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuOptionEntity.name, CustomersRolesName.Customer);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuItemOptionEntity.name, CustomersRolesName.Customer);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuItemOptionEntity.name, CustomersRolesName.Customer);
 
     this.addDefPerRole(ContentPermissionsKeys.ContentViewOwn, PaymentCardEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentEditOwn, PaymentCardEntity.name, CustomersRolesName.Customer);

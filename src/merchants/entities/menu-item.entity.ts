@@ -1,9 +1,10 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, ManyToMany, JoinTable } from 'typeorm';
 import { ContentEntity } from '../../cms/content/entities/content.entity';
 import { MerchantEntity } from './merchant.entity';
 import { MenuCategoryEntity } from './menu-category.entity';
 import { ColumnNumericTransformer } from '../../shared/column-numeric-transformer';
 import { OwnerFields } from '../../cms/roles-and-permissions/decorators/owner-fields.decorator';
+import { MenuItemOptionEntity } from './menu-item-option.entity';
 
 @Entity()
 @OwnerFields(['merchant.userId'])
@@ -22,7 +23,7 @@ export class MenuItemEntity extends ContentEntity {
 
   @ManyToOne(type => MerchantEntity, {
     eager: true,
-    cascade: true,
+    onDelete: 'CASCADE',
     nullable: false,
   })
   @JoinColumn()
@@ -30,6 +31,12 @@ export class MenuItemEntity extends ContentEntity {
 
   @Column()
   merchantId: number;
+
+  @ManyToMany(type => MenuItemOptionEntity, io => io.item, {
+    eager: true,
+  })
+  @JoinTable()
+  options: MenuItemOptionEntity[];
 
   @Index({ fulltext: true })
   @Column('varchar', { length: 64 })

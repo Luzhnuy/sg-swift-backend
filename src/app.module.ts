@@ -22,6 +22,8 @@ import { SettingsService } from './settings/services/settings.service';
 import { Subject } from 'rxjs';
 import { SettingsVariablesKeys } from './settings/providers/settings-config';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { ApiV1Module } from './api-v1/api-v1.module';
+import { ApiTokensService } from './api-v1/services/api-tokens.service';
 
 @Module({
   imports: [
@@ -65,6 +67,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     PromoCodesModule,
     OldDatabaseModule,
     SchedulerModule,
+    ApiV1Module,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -58,7 +58,7 @@ export class OrdersConfig extends RolesAndPermissionsModuleConfig {
     super(contentPermissionHelper);
     this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, DriversRolesName.Driver);
     this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, CustomersRolesName.Customer);
-    // this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, MerchantsRolesName.Merchant);
+    this.addDefPerRoleShort(PermissionKeys.AllowChangeOrderStatus, MerchantsRolesName.Merchant);
     this.addDefPerRoleShort(PermissionKeys.AllowRateOwnOrder, CustomersRolesName.Customer);
     this.addDefPerRoleShort(PermissionKeys.AllowDownloadReport, MerchantsRolesName.Merchant);
 

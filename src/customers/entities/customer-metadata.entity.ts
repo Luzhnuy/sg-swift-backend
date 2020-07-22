@@ -40,6 +40,9 @@ export class CustomerMetadataEntity extends ContentEntity {
   @Column('boolean', { default: false })
   isFacebook: boolean;
 
+  @Column('boolean', { default: false })
+  isApple: boolean;
+
   @Column('text', {
     nullable: true,
     default: null,

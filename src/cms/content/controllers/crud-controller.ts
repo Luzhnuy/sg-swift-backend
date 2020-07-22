@@ -9,6 +9,7 @@ import { RolesAndPermissionsService } from '../../roles-and-permissions/services
 import { ContentEntityNotFoundGuard } from '../guards/content-entity-not-found.guard';
 import { ContentViewUnpublishedPermissionsGuard } from '../guards/content-view-unpublished-permission.guard';
 import { ContentEntityParam } from '../decorators/content-entity-param.decorator';
+import { PaymentCardEntity } from '../../../payments/entities/payment-card.entity';
 
 export class CrudController {
 
@@ -205,10 +206,22 @@ export class CrudController {
     if (query.orderBy && query.order) {
       builder.addOrderBy(`entity.${query.orderBy}`, query.order.toUpperCase() as any);
     }
-    query.limit = query.limit || 200;
-    query.page = query.page || 0;
-    builder.take(query.limit || 200);
-    builder.skip(query.page * query.limit || 0);
+    if (query.limit) {
+      const maxLimit = 100; // 100
+      const queryLimit = parseInt(query.limit,  10);
+      if (queryLimit > maxLimit) {
+        console.warn(`Limit was overriden due to more than max limit (${maxLimit})`);
+        query.limit = maxLimit;
+      } else {
+        query.limit = queryLimit;
+      }
+      query.page = query.page || 0;
+    } else {
+      query.limit = 25;
+      query.page = 0;
+    }
+    builder.take(query.limit);
+    builder.skip(query.page);
     delete query.limit;
     delete query.page;
     delete query.orderBy;

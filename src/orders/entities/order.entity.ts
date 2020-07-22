@@ -33,6 +33,7 @@ export enum OrderSource {
   CustomerOld = 'CustomerOld',
   Merchant = 'Merchant',
   Manual = 'Manual',
+  Api = 'Api',
 }
 
 export enum OrderType {

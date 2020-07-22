@@ -164,7 +164,7 @@ export class OrdersService {
           }
         } else if (PaymentMethods.PayPal === order.metadata.paymentMethod) {
           const chargeId = order.metadata.chargeId.split('-----')[1];
-          order.metadata.chargedAmount = 0;
+          // order.metadata.chargedAmount = 0;
           await this.paymentsPayPalService
             .proceedCharge(chargeId, {
               amount: {
@@ -173,6 +173,7 @@ export class OrdersService {
               },
               is_final_capture: true,
             });
+          order.metadata.chargedAmount = 300;
         }
       }
     } catch (e) {

@@ -54,9 +54,7 @@ import { OrdersScheduledTasksKeys } from '../data/scheduled-tasks-keys';
 import { PaymentsStripeService } from '../../payments/services/payments-stripe.service';
 import { timer } from 'rxjs';
 import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.entity';
-import { Readable } from 'stream';
 import { Response } from 'express';
-import { createReadStream } from 'fs';
 import { MerchantsRolesName } from '../../merchants/services/merchants-config.service';
 
 interface SearchQuery {
@@ -116,6 +114,18 @@ export class OrdersController extends CrudController {
   async loadContentEntities(@User() user: UserEntity, @Query() query: SearchQuery) {
     const builder = await this.getQueryBuilder(user, query);
     return builder.getMany();
+  }
+
+  @Get('dashboard')
+  async loadDashboardContentEntities(@User() user: UserEntity, @Query() query: SearchQuery) {
+    delete query.limit;
+    delete query.page;
+    const limit = 100;
+    const builder = await this.getQueryBuilder(user, query, false, true);
+    builder.leftJoinAndSelect('entity.metadata', 'metadata');
+    const totalCount = await builder.getCount();
+    const pagesCount = Math.ceil(totalCount / limit);
+    return this.getAllByStep([], builder, pagesCount, limit);
   }
 
   @Get('get-anonymous-order/:uuid')
@@ -517,10 +527,19 @@ export class OrdersController extends CrudController {
         } catch (e) {
           console.log(e);
         }
+        let refundCancellationFee = false;
+        if ([OrderType.Menu, OrderType.Custom].indexOf(order.type) !== -1) {
+          refundCancellationFee = order.customer ? order.customer.userId === user.id : false;
+        } else {
+          const scheduledDate = new Date(order.scheduledAt);
+          const nowDate = new Date();
+          const timeDiff = Math.round((scheduledDate.getTime() - nowDate.getTime()) / 1000);
+          refundCancellationFee = timeDiff < 1800;
+        }
         return await this.ordersService.updateOrderStatus(order, status,
           undefined, undefined, undefined,
           cancellationReason, false,
-          order.customer ? order.customer.userId === user.id : false);
+          refundCancellationFee);
       } else if (status === OrderStatus.Received) {
         this.ordersService.updateOrderStatus(order, status, driverProfileId);
       }
@@ -783,14 +802,24 @@ export class OrdersController extends CrudController {
     const payload = this.usersService.decodeAuthToken(query.token);
     const user = await this.usersService.getUserOneTimeAuth(payload);
     delete query.token;
-    const builder = await this.getQueryBuilder(user, query);
-    builder.innerJoinAndSelect('entity.merchant', 'merchant');
-    const orders = await builder.getMany();
+    delete query.limit;
+    delete query.page;
+    const limit = 100;
+    const builder = await this.getQueryBuilder(user, query, false, true);
+    builder
+      .leftJoinAndSelect('entity.merchant', 'merchant')
+      .leftJoinAndSelect('entity.metadata', 'metadata')
+      .leftJoinAndSelect('entity.driverProfile', 'driverProfile');
+    const totalCount = await builder.getCount();
+    const pagesCount = Math.ceil(totalCount / limit);
+    const orders = await this.getAllByStep([], builder, pagesCount, limit);
+    let res;
     if (user.roles.find(role => role.name === MerchantsRolesName.Merchant)) {
-      return this.reportsService.convertOrdersToCSVForMerchants(orders);
+      res = this.reportsService.convertOrdersToCSVForMerchants(orders);
     } else {
-      return this.reportsService.convertOrdersToCSV(orders);
+      res = this.reportsService.convertOrdersToCSV(orders);
     }
+    return res;
   }
 
   @Get('invoice')
@@ -901,7 +930,25 @@ export class OrdersController extends CrudController {
     return this.ordersService.prepareOrder(data);
   }
 
-  protected async getQueryBuilder(user: UserEntity, query: SearchQuery, skipPermission = false) {
+  private async getAllByStep(
+    orders: OrderEntity[],
+    builder: SelectQueryBuilder<OrderEntity>,
+    pagesCount: number,
+    limit = 25,
+    currentPage = 0,
+  ) {
+    if (pagesCount > currentPage) {
+      builder.take(limit);
+      builder.skip(currentPage * limit);
+      const newOrders = await builder.getMany();
+      orders = orders.concat(newOrders);
+      return await this.getAllByStep(orders, builder, pagesCount, limit, ++currentPage);
+    } else {
+      return orders;
+    }
+  }
+
+  protected async getQueryBuilder(user: UserEntity, query: SearchQuery, skipPermission = false, skipJoinTables = false) {
     const localQuery = {
       customerId: query.customerId,
       statuses: query.statuses,
@@ -945,7 +992,7 @@ export class OrdersController extends CrudController {
       }
       builder.andWhere('entity.type IN (:...types)', localQuery);
     }
-    if (localQuery.query) {
+    if (!skipJoinTables && localQuery.query) {
       localQuery.query = `%${localQuery.query}%`;
       builder
         .andWhere(new Brackets(sqb => {
@@ -957,11 +1004,13 @@ export class OrdersController extends CrudController {
             .orWhere('entity.id LIKE :query', localQuery);
         }));
     }
-    builder
-      .leftJoinAndSelect('entity.metadata', 'metadata')
-      .leftJoinAndSelect('entity.orderItems', 'orderItems')
-      .leftJoinAndSelect('entity.driverProfile', 'driverProfile')
-      .leftJoinAndSelect('driverProfile.status', 'driverProfile.status');
+    if (!skipJoinTables) {
+      builder
+        .leftJoinAndSelect('entity.metadata', 'metadata')
+        .leftJoinAndSelect('entity.orderItems', 'orderItems')
+        .leftJoinAndSelect('entity.driverProfile', 'driverProfile')
+        .leftJoinAndSelect('driverProfile.status', 'driverProfile.status');
+    }
     return builder as SelectQueryBuilder<OrderEntity>;
   }
 

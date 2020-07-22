@@ -39,7 +39,9 @@ import { SettingsVariablesKeys } from '../../settings/providers/settings-config'
 import { CustomersService } from '../services/customers.service';
 import { Subject } from 'rxjs';
 import { EmailSenderService } from '../../email-distributor/services/email-sender.service';
-import * as fs from "fs";
+import * as fs from 'fs';
+import { OrderEntity } from '../../orders/entities/order.entity';
+import { OrderMetadataEntity } from '../../orders/entities/order-metadata.entity';
 
 @Controller('customers')
 @CrudEntity(CustomerEntity)
@@ -144,15 +146,38 @@ export class CustomersController extends CrudController {
     return entity;
   }
 
+  @Get(':id/debt')
+  @UseGuards(ContentEntityNotFoundGuard)
+  async loadCustomerDebt(@ContentEntityParam() entity: ContentEntity) {
+    const builder = this.repository
+      .createQueryBuilder('entity');
+    builder.select('SUM(metadata.debtAmount) as debtAmount');
+    builder.where('entity.id = :id', { id: entity.id });
+    builder.innerJoin(OrderEntity, 'order', 'order.customerId = entity.id');
+    builder.innerJoin(OrderMetadataEntity, 'metadata', 'order.metadataId = metadata.id');
+    const res = await builder.getRawOne();
+    if (res.debtAmount && res.debtAmount !== null && res.debtAmount !== '0' && res.debtAmount === 0) {
+      return parseInt(res.debtAmount, 10);
+    } else {
+      return 0;
+    }
+  }
+
   @Post('/sign-up')
   async createInactiveCustomer(@Body() customer: CustomerEntity, @User() user: UserEntity) {
     const isNewUser = !customer.user.id;
     if (!isNewUser) {
       throw new UnprocessableEntityException('Cannot assign existed user');
     }
-    const existedCustomer = await this.repository.findOne({
-      email: customer.email,
-    });
+    let existedCustomer: CustomerEntity;
+    if (customer.email !== null) {
+      existedCustomer = await this.repository.findOne({
+        email: customer.email,
+      });
+      if (existedCustomer && existedCustomer.user && existedCustomer.user.username !== customer.user.username) {
+        existedCustomer = null;
+      }
+    }
     if (existedCustomer) {
       if (existedCustomer.isPublished) {
         throw new UnprocessableEntityException('User already exists');

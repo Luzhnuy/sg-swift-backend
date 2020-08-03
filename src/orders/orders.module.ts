@@ -99,6 +99,11 @@ import { MenuSubOptionEntity } from '../merchants/entities/menu-sub-option.entit
     OrdersOldService,
     OrdersReportsService,
   ],
+  exports: [
+    OrdersService,
+    OrdersPriceCalculatorService,
+    OrdersEmailSenderService,
+  ]
 })
 export class OrdersModule {
 

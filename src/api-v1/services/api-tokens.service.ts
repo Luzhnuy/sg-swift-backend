@@ -17,6 +17,11 @@ export class ApiTokensService {
       .findOne({ userId });
   }
 
+  async getUserIdByToken(token: string) {
+    return this.repository
+      .findOne({ token });
+  }
+
   async generateToken(user: number | UserEntity) {
     let userId: number;
     switch (typeof user) {

@@ -5,6 +5,7 @@ import { SettingsVariablesKeys } from '../../settings/providers/settings-config'
 import { InjectRepository } from '@nestjs/typeorm';
 import { MapDistanceEntity } from '../entities/map-distance.entity';
 import { Repository } from 'typeorm';
+import { MerchantsZipcodeEntity } from '../entities/merchants-zipcode.entity';
 
 @Injectable()
 export class GeocoderService {
@@ -12,7 +13,10 @@ export class GeocoderService {
   private client: GoogleMapsClient;
 
   constructor(
-    @InjectRepository(MapDistanceEntity) private readonly repository: Repository<MapDistanceEntity>,
+    @InjectRepository(MapDistanceEntity)
+    private readonly repository: Repository<MapDistanceEntity>,
+    @InjectRepository(MerchantsZipcodeEntity)
+    protected readonly repositoryMerchants: Repository<MerchantsZipcodeEntity>,
     private settingsService: SettingsService,
   ) {
     this.settingsService
@@ -22,6 +26,14 @@ export class GeocoderService {
         this.client = createClient({ key, Promise });
       });
     // TODO upload map-distances
+  }
+
+  async checkMerchantsZipcodePresents(zipcode: string) {
+    const count = await this.repositoryMerchants
+      .count({
+        zipcode,
+      });
+    return !!count;
   }
 
   async getDistance(origin, destination) {

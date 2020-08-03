@@ -1,5 +1,5 @@
 import { HttpService, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { MoreThan, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
 import { ReplaySubject, Subject } from 'rxjs';
@@ -22,6 +22,7 @@ import { SchedulerService } from '../../scheduler/services/scheduler.service';
 import { PaymentCardEntity } from '../../payments/entities/payment-card.entity';
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { SettingsService } from '../../settings/services/settings.service';
+import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.entity';
 
 @Injectable()
 export class OrdersService {
@@ -35,6 +36,8 @@ export class OrdersService {
       private readonly repositoryMetadata: Repository<OrderMetadataEntity>,
     @InjectRepository(OrderDeliveredToEntity)
       private readonly repositoryOrderDeliveredTo: Repository<OrderDeliveredToEntity>,
+    @InjectRepository(MenuSubOptionEntity)
+    protected readonly repositorySubOptions: Repository<MenuSubOptionEntity>,
     @InjectStripe() private readonly stripeClient: Stripe,
     private readonly httpService: HttpService,
     private geocoderService: GeocoderService,
@@ -79,6 +82,41 @@ export class OrdersService {
           console.error(`order "${task.data}" not found, when trying to charge debt automatically`);
         }
       });
+  }
+
+  public getById(orderId: number) {
+    return this.repository
+      .findOne({ id: orderId});
+  }
+
+  public saveOrder(order: OrderEntity) {
+    return this.repository
+      .save(order);
+  }
+
+  public async assignSubOptionsToItems(order: OrderEntity) {
+    const subOptionsIds = order.orderItems
+      .reduce((res: number[], oi) => {
+        if (oi.subOptionIds && oi.subOptionIds.length) {
+          return [ ...res, ...oi.subOptionIds];
+        }
+        return res;
+      }, []);
+    if (subOptionsIds.length) {
+      const subOptions = await this.repositorySubOptions
+        .find({
+          where: {
+            id: In(subOptionsIds),
+          },
+        });
+      order.orderItems
+        .forEach(oi => {
+          if (oi.subOptionIds) {
+            oi.subOptions = oi.subOptionIds
+              .map(soId => subOptions.find(so => so.id === soId));
+          }
+        });
+    }
   }
 
   public async updateOrderStatus(
@@ -244,9 +282,11 @@ export class OrdersService {
       .getCount();
   }
 
-  public async bookOrder(order: OrderEntity) {
-    const data = this.getPrepareRequestData(order);
-    const prices = await this.prepareOrder(data);
+  public async bookOrder(order: OrderEntity, prices?: OrderPrepareRequestData) {
+    if (!prices) {
+      const data = this.getPrepareRequestData(order);
+      prices = await this.prepareOrder(data);
+    }
     this.setPricesToOrder(order, prices);
     if (!order.metadata.paymentMethod || order.metadata.paymentMethod === PaymentMethods.Stripe) {
       const cardUserId = [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
@@ -308,10 +348,17 @@ export class OrdersService {
   }
 
   public async prepareOrder(data: OrderPrepareRequestData) {
+    let distance;
+    console.log('data.origin = ', data.origin);
+    console.log('data.destination = ', data.destination);
     if (data.origin && data.destination) {
-      data.distance = await this.geocoderService.getDistance( data.origin, data.destination );
+      distance = await this.geocoderService.getDistance(data.origin, data.destination);
+      console.log('distance = ', distance);
+      data.distance = distance;
     }
-    return this.priceCalculatorService.prepareOrder(data);
+    const result = await this.priceCalculatorService.prepareOrder(data);
+    result.distance = distance;
+    return result;
   }
 
   private async chargeCustomOrder(order: OrderEntity) {

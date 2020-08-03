@@ -28,7 +28,7 @@ export class DriversService {
   }
 
   getSingle(id) {
-    return this.repository.findOne(id);
+    return this.repository.findOne({ id });
   }
 
 }

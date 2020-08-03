@@ -9,17 +9,36 @@ import { ApiTokenEntity } from './entities/api-token.entity';
 import { TokensController } from './controllers/tokens.controller';
 import { ApiV1ModuleService } from './services/api-v1-module.service';
 import { ApiV1Config } from './providers/api-v1-config';
-import { SettingsModule } from '../settings/settings.module';
 import { ApiOrdersService } from './services/api-orders.service';
+import { GeocoderModule } from '../geocoder/geocoder.module';
+import { ApiV1Controller } from './controllers/api-v1.controller';
+import { PaymentsModule } from '../payments/payments.module';
+import { OrderTokenEntity } from './entities/order-token.entity';
+import { SchedulerModule } from '../scheduler/scheduler.module';
+import { DriversModule } from '../drivers/drivers.module';
+import { SettingsModule } from '../settings/settings.module';
+import { EmailDistributorModule } from '../email-distributor/email-distributor.module';
 
 @Module({
   imports: [
     CmsModule,
     TypeOrmModule.forFeature([
       ApiTokenEntity,
+      OrderTokenEntity,
     ]),
+    GeocoderModule,
+    PaymentsModule,
+    OrdersModule,
+    MerchantsModule,
+    SchedulerModule,
+    DriversModule,
+    SettingsModule,
+    EmailDistributorModule,
   ],
-  controllers: [TokensController],
+  controllers: [
+    TokensController,
+    ApiV1Controller,
+  ],
   providers: [
     ApiTokensService,
     ApiV1Config,

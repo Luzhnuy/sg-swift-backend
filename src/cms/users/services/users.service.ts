@@ -140,6 +140,32 @@ export class UsersService {
     }
   }
 
+  async checkUserPassword(userId, password) {
+    let user = await this.usersRepository.findOne({ id: userId });
+    if (!user) {
+      return this.throwDelayedError('User not found');
+    }
+    user.setPassword(password);
+    user = await this.usersRepository.findOne(user);
+    if (user) {
+      return true;
+    } else {
+      return this.throwDelayedError('Password is invalid');
+    }
+  }
+
+  private throwDelayedError(message) {
+    const delay = interval(3000);
+    return delay
+      .pipe(timeout(3100),
+        map(() => {
+          // TODO i18n
+          throw new UnprocessableEntityException(message);
+        }),
+      )
+      .toPromise();
+  }
+
   async updateLastAccess(user: UserEntity) {
     let entity = await this.lastAccessEntityRepository
       .findOne({ userId: user.id });

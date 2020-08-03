@@ -77,7 +77,7 @@ export class ContentPermissionHelper {
   }
 
   public getDescription(key: ContentPermissionsKeys | CommentPermissionsKeys, humanContentName: string): string {
-    let message = this.messages[key];
+    const message = this.messages[key];
     return `${message} ${humanContentName}`;
   }
 

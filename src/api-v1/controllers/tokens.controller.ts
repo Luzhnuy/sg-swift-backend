@@ -7,6 +7,7 @@ import { ApiTokensService } from '../services/api-tokens.service';
 import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
 import { CancelOrderData } from '../data/misc';
 import { UsersService } from '../../cms/users/services/users.service';
+import { ApiTestTokenEntity } from '../entities/api-test-token.entity';
 
 @Controller('tokens')
 export class TokensController {
@@ -14,8 +15,7 @@ export class TokensController {
     private tokensService: ApiTokensService,
     private usersService: UsersService,
     private rolesAndPermissions: RolesAndPermissionsService,
-  ) {
-  }
+  ) {}
 
   @Get('')
   public async getOwnToken(
@@ -26,11 +26,47 @@ export class TokensController {
     return res || new ApiTokenEntity();
   }
 
+  @Get('test')
+  public async getOwnTestToken(
+    @User() user: UserEntity,
+  ) {
+    const res = await this.tokensService
+      .getTokenByUserId(user.id, false);
+    return res || new ApiTestTokenEntity();
+  }
+
   @Post('')
-  public async generateNewToken(
+  public async generateNewProductionToken(
     @Body() data: { password: string },
     @User() user: UserEntity,
   ) {
+    return this.generateNewToken(user, data.password, true);
+  }
+
+  @Post('test')
+  public async generateNewTestingToken(
+    @Body() data: { password: string },
+    @User() user: UserEntity,
+  ) {
+    return this.generateNewToken(user, data.password, false);
+  }
+
+  private async generateNewToken(user: UserEntity, password: string, production: boolean) {
+    const isOk = await this.checkPermission(user, password);
+    if (isOk) {
+      const oldToken = await this.tokensService
+        .getTokenByUserId(user.id, production);
+      if (oldToken) {
+        await this.tokensService
+          .removeToken(oldToken.token, production);
+      }
+      const newToken = await this.tokensService
+        .generateToken(user.id, production);
+      return newToken;
+    }
+  }
+
+  private async checkPermission(user: UserEntity, password: string) {
     const permission = await this.rolesAndPermissions
       .getPermissionByKey(ApiV1PermissionKeys.GenerateOwnApiToken);
     const allowGenerateToken = await this.rolesAndPermissions
@@ -39,19 +75,8 @@ export class TokensController {
         user.roles,
       );
     if (allowGenerateToken) {
-      const passwordCorrect = await this.usersService
-        .checkUserPassword(user.id, data.password);
-      if (passwordCorrect) {
-        const oldToken = await this.tokensService
-          .getTokenByUserId(user.id);
-        if (oldToken) {
-          await this.tokensService
-            .removeToken(oldToken.token);
-        }
-        const newToken = await this.tokensService
-          .generateToken(user.id);
-        return newToken;
-      }
+      return await this.usersService
+        .checkUserPassword(user.id, password);
     } else {
       throw new UnauthorizedException('You cannot generate Api tokens');
     }

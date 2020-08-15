@@ -18,12 +18,14 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
 import { DriversModule } from '../drivers/drivers.module';
 import { SettingsModule } from '../settings/settings.module';
 import { EmailDistributorModule } from '../email-distributor/email-distributor.module';
+import { ApiTestTokenEntity } from './entities/api-test-token.entity';
 
 @Module({
   imports: [
     CmsModule,
     TypeOrmModule.forFeature([
       ApiTokenEntity,
+      ApiTestTokenEntity,
       OrderTokenEntity,
     ]),
     GeocoderModule,

@@ -33,6 +33,9 @@ import { SchedulerModule } from '../scheduler/scheduler.module';
 import { PriceCalculatorController } from './controllers/price-calculator.controller';
 import { PriceCalculatorConstantEntity } from './entities/price-calculator-constant.entity';
 import { MenuSubOptionEntity } from '../merchants/entities/menu-sub-option.entity';
+import { TestOrdersService } from './services/test-orders.service';
+import { TestOrderEntity } from './entities/test-order.entity';
+import { TestOrderMetadataEntity } from './entities/test-order-metadata.entity';
 
 @Module({
   imports: [
@@ -58,6 +61,8 @@ import { MenuSubOptionEntity } from '../merchants/entities/menu-sub-option.entit
       OrderDeliveredToEntity,
       PriceCalculatorConstantEntity,
       MenuSubOptionEntity,
+      TestOrderEntity,
+      TestOrderMetadataEntity,
     ]),
     OneSignalModule.forRootAsync({
       inject: [SettingsService],
@@ -98,12 +103,14 @@ import { MenuSubOptionEntity } from '../merchants/entities/menu-sub-option.entit
     OrdersPriceCalculatorService,
     OrdersOldService,
     OrdersReportsService,
+    TestOrdersService,
   ],
   exports: [
     OrdersService,
     OrdersPriceCalculatorService,
     OrdersEmailSenderService,
-  ]
+    TestOrdersService,
+  ],
 })
 export class OrdersModule {
 

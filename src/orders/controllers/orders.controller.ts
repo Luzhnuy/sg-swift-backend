@@ -56,6 +56,7 @@ import { timer } from 'rxjs';
 import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.entity';
 import { Response } from 'express';
 import { MerchantsRolesName } from '../../merchants/services/merchants-config.service';
+import { TestOrderEntity } from '../entities/test-order.entity';
 
 interface SearchQuery {
   customerId?: string | number;
@@ -77,6 +78,7 @@ export class OrdersController extends CrudController {
 
   constructor(
     @InjectRepository(OrderEntity) protected readonly repository: Repository<OrderEntity>,
+    @InjectRepository(TestOrderEntity) protected readonly repositoryTestOrders: Repository<TestOrderEntity>,
     @InjectRepository(OrderMetadataEntity) protected readonly repositoryMetadata: Repository<OrderMetadataEntity>,
     @InjectRepository(OrderItemEntity) protected readonly repositoryOrdersItems: Repository<OrderItemEntity>,
     @InjectRepository(MenuSubOptionEntity) protected readonly repositorySubOptions: Repository<MenuSubOptionEntity>,
@@ -130,7 +132,13 @@ export class OrdersController extends CrudController {
 
   @Get('get-anonymous-order/:uuid')
   async loadOrderForAnonymous(@User() user: UserEntity, @Param('uuid') uuid: string) {
-    const order = await this.repository.findOne({ uuid });
+    let order: OrderEntity | TestOrderEntity = await this.repository.findOne({ uuid });
+    if (!order) {
+      order = await this.repositoryTestOrders.findOne({ uuid });
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+    }
     return {
       id: order.id,
       uuid: order.uuid,
@@ -158,21 +166,21 @@ export class OrdersController extends CrudController {
         discount: order.metadata.discount,
         chargeId: order.metadata.chargeId,
       },
-      orderItems: order.orderItems.map(item => ({
+      orderItems: (order as OrderEntity).orderItems ? (order as OrderEntity).orderItems.map(item => ({
           description: item.description,
           price: item.price,
           quantity: item.quantity,
           sku: item.sku,
         }),
-      ),
-      driverProfile: order.driverProfile ? {
-        firstName: order.driverProfile.firstName,
-        lastName: order.driverProfile.lastName,
-        phone: order.driverProfile.phone,
-        type: order.driverProfile.type,
+      ) : [],
+      driverProfile: (order as OrderEntity).driverProfile ? {
+        firstName: (order as OrderEntity).driverProfile.firstName,
+        lastName: (order as OrderEntity).driverProfile.lastName,
+        phone: (order as OrderEntity).driverProfile.phone,
+        type: (order as OrderEntity).driverProfile.type,
         status: {
-          latitude: order.driverProfile.status.latitude,
-          longitude: order.driverProfile.status.longitude,
+          latitude: (order as OrderEntity).driverProfile.status.latitude,
+          longitude: (order as OrderEntity).driverProfile.status.longitude,
         },
       } : null,
     };

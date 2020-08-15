@@ -3,26 +3,27 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ApiTokenEntity } from '../entities/api-token.entity';
 import { UserEntity } from '../../cms/users/entities/user.entity';
-import * as crypto from 'crypto';
+import { ApiTestTokenEntity } from '../entities/api-test-token.entity';
 
 @Injectable()
 export class ApiTokensService {
 
   constructor(
     @InjectRepository(ApiTokenEntity) private readonly repository: Repository<ApiTokenEntity>,
+    @InjectRepository(ApiTestTokenEntity) private readonly repositoryTest: Repository<ApiTestTokenEntity>,
   ) {}
 
-  async getTokenByUserId(userId: number) {
-    return this.repository
+  async getTokenByUserId(userId: number, production = true) {
+    return this.getRepository(production)
       .findOne({ userId });
   }
 
-  async getUserIdByToken(token: string) {
-    return this.repository
+  async getByToken(token: string, production = true) {
+    return this.getRepository(production)
       .findOne({ token });
   }
 
-  async generateToken(user: number | UserEntity) {
+  async generateToken(user: number | UserEntity, production = true) {
     let userId: number;
     switch (typeof user) {
       case 'number':
@@ -35,38 +36,27 @@ export class ApiTokensService {
         userId = user.id;
         break;
     }
-    return this.saveToken(userId);
+    return this.saveToken(userId, production);
   }
 
-  async removeToken(token: string) {
-    const tokenExists = await this.repository
+  async removeToken(token: string, production = true) {
+    const tokenExists = await this.getRepository(production)
       .findOne({ token });
     if (tokenExists) {
-      return this.repository
+      return this.getRepository(production)
         .remove(tokenExists);
     } else {
       throw new NotFoundException('Token wasn\'t found');
     }
   }
 
-  private async saveToken(userId) {
+  private async saveToken(userId, production: boolean) {
     const apiToken = new ApiTokenEntity({ userId });
-    return this.repository
+    return this.getRepository(production)
       .save(apiToken);
-    // const token = this.getRandToken();
-    // console.log('saveToken', token, token.length);
-    // const tokenExists = await this.repository
-    //   .findOne({ token });
-    // if (tokenExists) {
-    //   return await this.saveToken(userId);
-    // } else {
-    //   const apiToken = new ApiTokenEntity({ userId, token });
-    //   return await this.repository
-    //     .save(apiToken);
-    // }
   }
 
-  private getRandToken() {
-    return crypto.randomBytes(20).toString('hex');
+  private getRepository(production: boolean): Repository<ApiTokenEntity | ApiTestTokenEntity> {
+    return production ? this.repository : this.repositoryTest;
   }
 }

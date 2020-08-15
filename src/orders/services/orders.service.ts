@@ -84,6 +84,11 @@ export class OrdersService {
       });
   }
 
+  public findOrderForApi(params) {
+    return this.repository
+      .findAndCount(params);
+  }
+
   public getById(orderId: number) {
     return this.repository
       .findOne({ id: orderId});
@@ -349,11 +354,8 @@ export class OrdersService {
 
   public async prepareOrder(data: OrderPrepareRequestData) {
     let distance;
-    console.log('data.origin = ', data.origin);
-    console.log('data.destination = ', data.destination);
     if (data.origin && data.destination) {
       distance = await this.geocoderService.getDistance(data.origin, data.destination);
-      console.log('distance = ', distance);
       data.distance = distance;
     }
     const result = await this.priceCalculatorService.prepareOrder(data);
@@ -454,21 +456,7 @@ export class OrdersService {
     return debtAmount ? parseInt(debtAmount, 10) : 0;
   }
 
-  private setPricesToOrder(order: OrderEntity, prices: OrderPrepareRequestData) {
-    order.metadata.distance = prices.distance;
-    order.metadata.discount = prices.discount;
-    order.metadata.tip = prices.tip;
-    order.metadata.tipPercent = prices.tipPercent;
-    order.metadata.subtotal = prices.subtotal;
-    order.metadata.serviceFee = prices.serviceFee;
-    order.metadata.totalAmount = prices.totalAmount;
-    order.metadata.tvq = prices.tvq;
-    order.metadata.tps = prices.tps;
-    order.metadata.customAmount = prices.customAmount;
-    order.metadata.deliveryCharge = prices.deliveryCharge;
-  }
-
-  private getPrepareRequestData(order: OrderEntity) {
+  public getPrepareRequestData(order: OrderEntity) {
     const data: OrderPrepareRequestData = {
       origin: { lat: order.metadata.pickUpLat, lon: order.metadata.pickUpLon },
       destination: { lat: order.metadata.dropOffLat, lon: order.metadata.dropOffLon },
@@ -488,5 +476,19 @@ export class OrdersService {
       customAmount: order.metadata.customAmount,
     };
     return data;
+  }
+
+  public setPricesToOrder(order: OrderEntity, prices: OrderPrepareRequestData) {
+    order.metadata.distance = prices.distance;
+    order.metadata.discount = prices.discount;
+    order.metadata.tip = prices.tip;
+    order.metadata.tipPercent = prices.tipPercent;
+    order.metadata.subtotal = prices.subtotal;
+    order.metadata.serviceFee = prices.serviceFee;
+    order.metadata.totalAmount = prices.totalAmount;
+    order.metadata.tvq = prices.tvq;
+    order.metadata.tps = prices.tps;
+    order.metadata.customAmount = prices.customAmount;
+    order.metadata.deliveryCharge = prices.deliveryCharge;
   }
 }

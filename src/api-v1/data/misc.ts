@@ -1,71 +1,82 @@
-import { OrderSource, OrderType } from '../../orders/entities/order.entity';
+import { OrderSource, OrderStatus, OrderType } from '../../orders/entities/order.entity';
 
 export interface HasAuth {
-  key: string;
+  Key: string;
 }
 
 export interface PrepareOrderData extends HasAuth {
-  scheduledAt: string;
-  largeOrder?: boolean;
-  bringBack?: boolean;
-  dropOffAddress?: string;
-  dropOffPosition?: {
-    lat: number;
-    lon: number;
-  };
-  type: OrderType;
-  source: OrderSource;
-  customerName: string;
-  customerPhone: string;
-  customerEmail?: string;
-  instructions?: string;
+  ScheduledAt: string;
+  LargeOrder?: boolean;
+  BringBack?: boolean;
+  DropOffAddress?: string;
+  Type: OrderType;
+  Source: OrderSource;
+  CustomerName?: string;
+  CustomerPhone?: string;
+  CustomerEmail?: string;
+  Instructions?: string;
   utcOffset?: number;
 }
 
 export interface OrderPrices {
-  baseFare: number;
-  distanceFare: number;
-  largeOrderFare: number;
-  surgeTime: boolean;
+  BaseFare: number;
+  DistanceFare: number;
+  LargeOrderFare: number;
+  SurgeTime: boolean;
   tvq: number;
   tps: number;
-  totalAmount: number;
-  deliveryCharge: number;
-  distance: number;
-  serviceFee: number;
+  TotalAmount: number;
+  DeliveryCharge: number;
+  Distance: number;
+  ServiceFee: number;
 }
 
 export interface PreparedOrderData {
-  token: string;
-  prices: OrderPrices,
+  Token: string;
+  Prices: OrderPrices;
 }
 
 export interface CreateOrderData extends HasAuth {
-  token: string;
+  Token: string;
 }
 
 export interface TrackOrderData extends HasAuth {
-  id: string;
+  Id: string;
 }
 
 export interface CancelOrderData extends HasAuth {
-  id: string;
-  reason: string;
+  Id: string;
+  Reason: string;
 }
 
 export interface TrackOrderInfo {
-  id: string;
-  trackingLink: string;
-  customerName: string;
-  deliveryAddress: string;
-  customerPhone: string;
-  instructions: string;
-  scheduledTime: string | Date;
-  deliveryStage: string;
-  driverName?: string;
+  Id: string;
+  TrackingLink: string;
+  CustomerName: string;
+  DeliveryAddress: string;
+  CustomerPhone: string;
+  Instructions: string;
+  ScheduledTime: string | Date;
+  DeliveryStage: string;
+  DriverName?: string;
+}
+
+export interface OrdersListRequestData extends HasAuth {
+  Offset?: number;
+  Limit?: number;
+  DeliveryStage?: OrderStatus | OrderStatus[];
+  OrderType?: OrderType | OrderType[];
+  Period?: Date[];
+  SortBy?: 'Id' | 'ScheduledAt';
+  OrderBy?: 'Asc' | 'Desc';
+}
+
+export interface OrdersListResponseData {
+  Count: number;
+  Orders: TrackOrderInfo[];
 }
 
 export interface ErrorResponse {
-  code: number;
-  message: string;
+  Code: number;
+  Message: string;
 }

@@ -363,11 +363,12 @@ export class MerchantsController extends CrudController {
   private async generateSmsCode(userId, phone) {
     const smsActivation = await this.smsActivationService
       .createSmsActivation(userId);
-    await this.smsActivationService.sendVerificationSms({
-      phone,
-      code: smsActivation.code,
-      text: this.settingsService.getValue(SettingsVariablesKeys.SMSSignUpMerchantText),
-    });
+    await this.smsActivationService
+      .sendVerificationSms({
+        phone,
+        code: smsActivation.code,
+        text: this.settingsService.getValue(SettingsVariablesKeys.SMSSignUpMerchantText),
+      });
   }
 
   private createImage(entity: MerchantEntity) {
@@ -380,7 +381,9 @@ export class MerchantsController extends CrudController {
     }
     const ext = isJpeg ? '.jpg' : '.png';
     const { path, fileName } = this.getFileName(entity.id, ext);
-    const data = isJpeg ? entity.logo.replace(jpegStartStr, '') : entity.logo.replace(pngStartStr, '');
+    const data = isJpeg ?
+      entity.logo.replace(jpegStartStr, '') :
+      entity.logo.replace(pngStartStr, '');
     try {
       fs.readdirSync(path);
     } catch (e) {
@@ -426,10 +429,10 @@ export class MerchantsController extends CrudController {
     if (hasCreditCard) {
       builder.innerJoin(PaymentCardEntity, 'card', 'card.authorId = entity.userId');
     }
-    // builder.leftJoinAndSelect('departments.test', 'test');
-    builder.leftJoinAndSelect('departments.zipcodeMapDistance', 'zipcodeMapDistance');
     if (zipcode) {
+      builder.leftJoin('departments.zipcodeMapDistance', 'zipcodeMapDistance');
       builder.andWhere('zipcodeMapDistance.destination = :zipcode', { zipcode });
+      builder.addSelect('zipcodeMapDistance.distance');
       builder.orderBy('zipcodeMapDistance.distance', 'ASC');
     }
     const extraWhere = await this.getWhereRestrictionsByPermissions(user);

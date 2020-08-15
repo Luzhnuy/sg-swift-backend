@@ -1,6 +1,8 @@
 # Overview
 
+## Prepare local environment
 
+rename /src/environment.default.ts to /src/environment.ts and update environment variables.
 
 ## Installation
 

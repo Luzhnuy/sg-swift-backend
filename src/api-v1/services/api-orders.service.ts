@@ -190,6 +190,12 @@ export class ApiOrdersService {
     // const newOrder = await this.ordersService
     const newOrder = await this.getService(production)
       .saveOrder(bookedOrderData);
+    if (production) {
+      this.ordersService.emitOrderUpdate({
+        eventName: 'created',
+        updateData: newOrder as OrderEntity,
+      });
+    }
     await this.repository
       .remove(token);
     return this.getOrderData(newOrder);
@@ -388,7 +394,6 @@ export class ApiOrdersService {
     const googlePlace = await this.geocoderService
       .getAddress(addressStr);
     if (googlePlace) {
-      console.log('googlePlace :: ', googlePlace);
       const shortZipcode = this.geocoderService.getShortZipcode(googlePlace);
       const zoneAvailable = await this.geocoderService
         .checkMerchantsZipcodePresents(shortZipcode);
@@ -498,7 +503,7 @@ export class ApiOrdersService {
     if (instructions.length > 64) {
       throw {
         Code: 108,
-        Message: 'Missing Information fields. Invalid apt number.',
+        Message: 'Invalid Information fields. Instructions should be less than 65 characters.',
       };
     }
     return true;

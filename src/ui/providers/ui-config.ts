@@ -16,7 +16,9 @@ export enum UIPermissionKeys {
   AllowPromoCodesAccess = 'UIAllowPromoCodesAccess',
   AllowCustomersAccess = 'UIAllowCustomersAccess',
   AllowPriceCalculatorConstantsAccess = 'UIAllowPriceCalculatorConstantsAccess',
+  AllowZipcodesAccess = 'UIAllowZipcodesAccess',
   AllowZipcodesListsAccess = 'UIAllowZipcodesListsAccess',
+  AllowFeedbackAccess = 'UIAllowFeedbackAccess',
 }
 
 @Injectable()
@@ -100,6 +102,15 @@ export class UiConfig {
       description: 'View Zipcodes Lists section',
       group: this.MODULE_GROUP,
     }),
+    new PermissionEntity({
+      key: UIPermissionKeys.AllowZipcodesAccess,
+      description: 'View Zipcodes section',
+      group: this.MODULE_GROUP,
+    }),
+    new PermissionEntity({
+      key: UIPermissionKeys.AllowFeedbackAccess,
+      description: 'View Review & Feedback section',
+      group: this.MODULE_GROUP,
+    }),
   ];
-
 }

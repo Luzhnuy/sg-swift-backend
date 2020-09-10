@@ -4,6 +4,7 @@ export interface OrderExtras {
   baseFare: number;
   distanceFare: number;
   largeOrderFare: number;
+  awaitingTimeFare?: number;
   surgeTime: boolean;
 }
 
@@ -37,5 +38,6 @@ export interface OrderPrepareRequestData extends OrderPrepareData {
   origin: string | { lat: number, lon: number };
   destination: string | { lat: number, lon: number };
   scheduledTime: number; // minutes
+  arrivalAt?: Date | string;
   extras: OrderExtras;
 }

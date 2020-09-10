@@ -172,9 +172,6 @@ export class OrdersReportsService {
   }
 
   private getInvoiceHtml(data: PdfInvoice, startDate: Date, endDate: Date) {
-
-    console.log('getInvoiceHtml :: ', data);
-
     const startDateStr = this.formatDateShort(startDate);
     const endDateStr = this.formatDateShort(endDate);
     const commission = data.commission / 100;

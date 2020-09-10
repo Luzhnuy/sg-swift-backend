@@ -15,7 +15,6 @@ export class ContentEntity {
   @JoinColumn()
   author: UserEntity;
 
-  @Column()
   @Column({default: null})
   authorId: number;
 

@@ -34,7 +34,7 @@ export class OrdersPriceCalculatorService {
   }
 
   private async calcCustomOrder(data: OrderPrepareRequestData) {
-    data.extras = this.getCustomExtras(data.distance, data.scheduledTime, data.bringBack, data.largeOrder);
+    data.extras = this.getCustomExtras(data.distance, data.scheduledTime, data.bringBack, data.largeOrder, data.arrivalAt);
     data.deliveryCharge = this.calcExtras(data.extras);
     return await this.calcTaxes(data);
   }
@@ -52,16 +52,8 @@ export class OrdersPriceCalculatorService {
   }
 
   private async calcMenuOrder(data: OrderPrepareRequestData) {
-    data.deliveryCharge = this.getConstant(PriceCalculatorConstants.MenuBaseFare);
-    data.extras = {
-      surgeTime: this.isSurgeTime(data.scheduledTime),
-      baseFare: data.deliveryCharge,
-      distanceFare: 0,
-      largeOrderFare: 0,
-    };
-    if (data.extras.surgeTime) {
-      data.deliveryCharge += data.deliveryCharge * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
-    }
+    data.extras = this.getMenuExtras(data.distance, data.scheduledTime);
+    data.deliveryCharge = this.calcExtras(data.extras);
     return await this.calcTaxes(data);
   }
 
@@ -135,22 +127,65 @@ export class OrdersPriceCalculatorService {
     return extras;
   }
 
-  private getCustomExtras(distance = 0, scheduledTime = 0, bringBack = false, largeOrder = false): OrderExtras {
+  private getCustomExtras(
+    distance = 0,
+    scheduledTime = 0,
+    bringBack = false,
+    largeOrder = false,
+    arrivalAt?,
+  ): OrderExtras {
     const extras: OrderExtras = {
       baseFare: 0,
       distanceFare: 0,
       largeOrderFare: 0,
+      awaitingTimeFare: 0,
       surgeTime: false,
     };
     extras.baseFare = this.getConstant(PriceCalculatorConstants.CustomBaseFare);
     if (distance > this.getConstant(PriceCalculatorConstants.CustomDistanceFareMinDistance)) {
       const km = (
         distance >
-          this.getConstant(PriceCalculatorConstants.CustomDistanceFareMaxDistance) ?
-            this.getConstant(PriceCalculatorConstants.CustomDistanceFareMaxDistance) :
-            (distance - this.getConstant(PriceCalculatorConstants.CustomDistanceFareMinDistance))
-        ) / 1000;
+        this.getConstant(PriceCalculatorConstants.CustomDistanceFareMaxDistance) ?
+          this.getConstant(PriceCalculatorConstants.CustomDistanceFareMaxDistance) :
+          (distance - this.getConstant(PriceCalculatorConstants.CustomDistanceFareMinDistance))
+      ) / 1000;
       extras.distanceFare = km * this.getConstant(PriceCalculatorConstants.CustomDistanceFareKoef);
+    }
+    if (arrivalAt) {
+      if (typeof arrivalAt === 'string') {
+        arrivalAt = new Date(arrivalAt);
+      }
+      const now = new Date();
+      const diff = Math.ceil((now.getTime() - arrivalAt.getTime()) / 60000);
+      if (diff > 5) {
+        extras.awaitingTimeFare = (diff - 5) * this.getConstant(PriceCalculatorConstants.CustomAwaitingTimeFareKoef);
+      }
+    }
+    extras.surgeTime = this.isSurgeTime(scheduledTime);
+    if (extras.surgeTime) {
+      extras.baseFare += extras.baseFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.distanceFare += extras.distanceFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+      extras.awaitingTimeFare += extras.awaitingTimeFare * this.getConstant(PriceCalculatorConstants.SurgeTimeKoef);
+    }
+    return extras;
+  }
+
+  private getMenuExtras(distance = 0, scheduledTime = 0): OrderExtras {
+    const extras: OrderExtras = {
+      baseFare: 0,
+      distanceFare: 0,
+      largeOrderFare: 0,
+      surgeTime: false,
+    };
+    extras.baseFare = this.getConstant(PriceCalculatorConstants.MenuBaseFare);
+    if (distance > this.getConstant(PriceCalculatorConstants.MenuDistanceFareMinDistance)) {
+      const km = (
+        distance >
+        this.getConstant(PriceCalculatorConstants.MenuDistanceFareMaxDistance) ?
+          this.getConstant(PriceCalculatorConstants.MenuDistanceFareMaxDistance) :
+          (distance - this.getConstant(PriceCalculatorConstants.MenuDistanceFareMinDistance))
+      ) / 1000;
+      extras.distanceFare = km * this.getConstant(PriceCalculatorConstants.MenuDistanceFareKoef);
     }
     extras.surgeTime = this.isSurgeTime(scheduledTime);
     if (extras.surgeTime) {

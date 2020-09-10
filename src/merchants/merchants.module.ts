@@ -24,6 +24,7 @@ import { MenuSubOptionsController } from './controllers/menu-sub-options.control
 import { MenuItemOptionEntity } from './entities/menu-item-option.entity';
 import { MenuOptionEntity } from './entities/menu-option.entity';
 import { MenuSubOptionEntity } from './entities/menu-sub-option.entity';
+import { MerchantsSearchService } from './services/merchants-search.service';
 
 @Module({
   imports: [
@@ -48,7 +49,7 @@ import { MenuSubOptionEntity } from './entities/menu-sub-option.entity';
   ],
   controllers: [MerchantsController, MenuCategoriesController, MenuItemsController,
     MenuItemOptionController, MenuOptionsController, MenuSubOptionsController],
-  providers: [MerchantsService, MerchantsModuleService, MerchantsConfigService, ItemsSearchService],
+  providers: [MerchantsService, MerchantsModuleService, MerchantsConfigService, ItemsSearchService, MerchantsSearchService],
   exports: [
     MerchantsService,
   ],

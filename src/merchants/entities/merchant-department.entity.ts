@@ -1,8 +1,10 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, OneToMany } from 'typeorm';
 import { ContentEntity } from '../../cms/content/entities/content.entity';
 import { ColumnNumericTransformer } from '../../shared/column-numeric-transformer';
 import { MerchantEntity } from './merchant.entity';
 import { MapDistanceEntity } from '../../geocoder/entities/map-distance.entity';
+import { ZipcodeEntity } from '../../geocoder/entities/zipcode.entity';
+import { ZipcodesDistanceAssocEntity } from '../../geocoder/entities/zipcodes-distance-assoc.entity';
 
 @Entity()
 export class MerchantDepartmentEntity extends ContentEntity {
@@ -32,12 +34,22 @@ export class MerchantDepartmentEntity extends ContentEntity {
   @Column('text', { nullable: true, default: null })
   street: string;
 
-  @ManyToOne(type => MapDistanceEntity)
-  @JoinColumn({ referencedColumnName: 'source', name: 'zipcode' })
-  zipcodeMapDistance: MapDistanceEntity;
+  // @ManyToOne(type => MapDistanceEntity)
+  // @JoinColumn({ referencedColumnName: 'source', name: 'zipcode' })
+  // zipcodeMapDistance: MapDistanceEntity;
 
   @Column('varchar', { nullable: true, default: null, length: 3 })
   zipcode: string;
+
+  @ManyToOne(type => ZipcodeEntity)
+  @JoinColumn()
+  zipcodeEntity: ZipcodeEntity;
+
+  @Column({
+    nullable: true,
+    default: null,
+  })
+  zipcodeEntityId: number;
 
   @Column('text', { nullable: true, default: null })
   building: string;
@@ -62,6 +74,11 @@ export class MerchantDepartmentEntity extends ContentEntity {
 
   @Column('smallint', { default: 22 * 60 })
   closeHours: number;
+
+  @Column('varchar', { length: 32, default: 'America/Montreal' })
+  timezone: string;
+
+  timezoneOffset?: number;
 
   constructor(data: Partial<MerchantDepartmentEntity>) {
     super();

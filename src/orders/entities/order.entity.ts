@@ -173,6 +173,12 @@ export class OrderEntity extends ContentEntity {
     nullable: true,
     default: null,
   })
+  arrivalAt: Date;
+
+  @Column('timestamp', {
+    nullable: true,
+    default: null,
+  })
   completedAt: Date;
 
   @Column('timestamp', {

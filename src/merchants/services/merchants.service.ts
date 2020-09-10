@@ -4,6 +4,7 @@ import { Brackets, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MenuItemEntity } from '../entities/menu-item.entity';
 import { ItemsSearchService } from './items-search.service';
+import { MerchantsSearchService } from './merchants-search.service';
 
 @Injectable()
 export class MerchantsService {
@@ -14,6 +15,7 @@ export class MerchantsService {
     @InjectRepository(MenuItemEntity)
     protected readonly menuItemEntityRepository: Repository<MenuItemEntity>,
     private readonly itemsSearchService: ItemsSearchService,
+    private readonly merchantsSearchService: MerchantsSearchService,
   ) {}
 
   async clearSearch() {
@@ -21,9 +23,19 @@ export class MerchantsService {
       .removeAll();
   }
 
+  async clearMerchantsSearch() {
+    return this.merchantsSearchService
+      .removeAllMerchants();
+  }
+
   async searchMenuItems(query: string) {
     return this.itemsSearchService
       .searchMenuItem(query);
+  }
+
+  async searchMerchants(query: string) {
+    return this.merchantsSearchService
+      .searchMerchants(query);
   }
 
   async migrateMenuItems(data: number[] | Partial<MenuItemEntity> = []) {
@@ -50,6 +62,15 @@ export class MerchantsService {
     }
     const allItems = await builder.getMany();
     return await this.itemsSearchService.registerMenuItems(allItems);
+  }
+
+  async migrateMerchants() {
+    const builder = await this.repository
+      .createQueryBuilder('merchant')
+      .select(['merchant.id', 'merchant.name', 'merchant.description', 'merchant.isPublished', 'merchant.enableMenu']);
+    const result = await builder
+      .getMany();
+    return await this.merchantsSearchService.registerMerchants(result);
   }
 
   async removeSearchItems(data: number[] | Partial<MenuItemEntity> = []) {

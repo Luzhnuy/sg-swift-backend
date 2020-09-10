@@ -70,6 +70,7 @@ interface SearchQuery {
   types?: OrderType[] | string | string[];
   token?: string; // for one-time-token
   timezoneOffset?: string;
+  rated?: string;
 }
 
 @Controller('orders')
@@ -114,6 +115,7 @@ export class OrdersController extends CrudController {
 
   @Get('')
   async loadContentEntities(@User() user: UserEntity, @Query() query: SearchQuery) {
+    query.limit = query.limit || 100;
     const builder = await this.getQueryBuilder(user, query);
     return builder.getMany();
   }
@@ -280,6 +282,8 @@ export class OrdersController extends CrudController {
         oi.orderId = order.id;
         return oi;
       });
+      await this.ordersService
+        .assignSubOptionsToItems(order);
       await this.repositoryOrdersItems.save(orderItems);
     }
     if (customerPhoto) {
@@ -338,6 +342,36 @@ export class OrdersController extends CrudController {
       updateData: order,
     });
     return order;
+  }
+
+  @Post('trip')
+  @UseGuards(ContentPermissionsGuard(isOwner => ContentPermissionsKeys[ContentPermissionsKeys.ContentAdd]))
+  async createContentEntityTrip(@Body() entities: OrderEntity[], @User() user: UserEntity) {
+    const tripUuid = Math.random()
+      .toString(36)
+      .replace(/[^a-z]+/g, '')
+      .substr(0, 10);
+    // tslint:disable-next-line:forin
+    for (const i in entities) {
+      const entity = entities[i];
+      entity.metadata.tripUuid = tripUuid;
+      await this.setMerchantToOrder(entity, user);
+    }
+    entities = await this.ordersService.bookTripOrders(entities);
+    const orders: OrderEntity[] = [];
+    // tslint:disable-next-line:forin
+    for (const i in entities) {
+      const entity = entities[i];
+      const order = await super.createContentEntity(entity, user) as OrderEntity;
+      orders.push(order);
+      this.emailSenderService
+        .sendConfirmationEmail(order);
+      this.ordersService.emitOrderUpdate({
+        eventName: 'created',
+        updateData: order,
+      });
+    }
+    return orders;
   }
 
   private async setMerchantToOrder(entity, user) {
@@ -555,6 +589,18 @@ export class OrdersController extends CrudController {
       console.error(e);
       throw e;
     }
+  }
+
+  @Post(':id/arrive')
+  @UseGuards(PermissionsGuard(() => PermissionKeys.AllowChangeOrderStatus))
+  @UseGuards(ContentEntityNotFoundGuard)
+  async updateArrivalAt(
+    @User() user: UserEntity,
+    @ContentEntityParam() order: OrderEntity,
+  ) {
+    order.arrivalAt = new Date();
+    return this.ordersService
+      .saveOrder(order);
   }
 
   @Get('customer/:customerId/debt')
@@ -802,6 +848,14 @@ export class OrdersController extends CrudController {
     return builder.getCount();
   }
 
+  @Get('total')
+  // TODO add permissions
+  async countOrdersJSON(@User() user: UserEntity, @Query() query: SearchQuery) {
+    const builder = await this.getQueryBuilder(user, query);
+    const count = await builder.getCount();
+    return { count };
+  }
+
   @Get('reports')
   @Header('content-type', 'application/octet-stream')
   @Header('content-disposition', 'attachment; filename="orders-reports.csv"')
@@ -963,6 +1017,7 @@ export class OrdersController extends CrudController {
       range: query.range,
       query: query.query,
       types: query.types,
+      rated: query.rated === 'true',
     };
     query.customerId = null;
     delete query.customerId;
@@ -974,6 +1029,7 @@ export class OrdersController extends CrudController {
     delete query.query;
     query.types = null;
     delete query.types;
+    delete query.rated;
     const builder = await super.getQueryBuilder(user, query, skipPermission);
     if (localQuery.customerId) {
       builder.andWhere('entity.customerId = :customerId', localQuery);
@@ -1011,6 +1067,9 @@ export class OrdersController extends CrudController {
             .orWhere('metadata.reference LIKE :query', localQuery)
             .orWhere('entity.id LIKE :query', localQuery);
         }));
+    }
+    if (localQuery.rated) {
+      builder.andWhere('metadata.rated = true');
     }
     if (!skipJoinTables) {
       builder

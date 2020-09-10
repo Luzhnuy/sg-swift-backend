@@ -12,7 +12,7 @@ import {
 import { CrudController } from '../../cms/content/controllers/crud-controller';
 import { CrudEntity } from '../../cms/content/decorators/crud-controller.decorator';
 import { MerchantEntity } from '../entities/merchant.entity';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Repository, In } from 'typeorm';
 import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
 import { ContentPermissionHelper, ContentPermissionsKeys } from '../../cms/roles-and-permissions/misc/content-permission-helper';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -35,6 +35,11 @@ import { SmsActivationService } from '../../sms-activation/services/sms-activati
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { SettingsService } from '../../settings/services/settings.service';
 import { EmailSenderService } from '../../email-distributor/services/email-sender.service';
+import * as time from 'time';
+import { OrderEntity } from '../../orders/entities/order.entity';
+import { MerchantsSearchService } from '../services/merchants-search.service';
+import { MenuItemEntity } from '../entities/menu-item.entity';
+import { ZipcodesService } from '../../geocoder/services/zipcodes.service';
 
 @Controller('merchants')
 @CrudEntity(MerchantEntity)
@@ -47,15 +52,79 @@ export class MerchantsController extends CrudController {
     protected readonly repositoryDepartments: Repository<MerchantDepartmentEntity>,
     @InjectRepository(MenuCategoryEntity)
     protected readonly repositoryCategories: Repository<MenuCategoryEntity>,
+    @InjectRepository(MenuItemEntity)
+    protected readonly repositoryMenuItems: Repository<MenuItemEntity>,
     protected rolesAndPermissions: RolesAndPermissionsService,
     protected contentPermissionsHelper: ContentPermissionHelper,
     private merchantsService: MerchantsService,
+    private merchantsSearchService: MerchantsSearchService,
     private usersService: UsersService,
     private smsActivationService: SmsActivationService,
     private settingsService: SettingsService,
     private readonly emailSenderService: EmailSenderService,
+    private readonly zipcodesService: ZipcodesService,
   ) {
     super(rolesAndPermissions, contentPermissionsHelper);
+  }
+
+  @Get('registerSearch')
+  registerSearch() {
+    return this.merchantsService
+      .migrateMerchants();
+  }
+
+  @Get('resetSearch')
+  resetSearch() {
+    return this.merchantsService
+      .clearMerchantsSearch();
+  }
+
+  @Get('doSearch')
+  async doSearch(
+    @User() user: UserEntity,
+    @Query('query') query: string,
+  ) {
+    const mainMerchantHits: any[] = await this.merchantsService
+      .searchMerchants(query);
+    const mainMerchantIds: number[] = mainMerchantHits
+      .map(result => result._source.id);
+    let extraMerchantsIds: number[] = [];
+    const hits: any[] = await this.merchantsService.searchMenuItems(query);
+    if (hits.length === 0) {
+      return [];
+    }
+    const itemsIds: number[] = hits.map(hit => hit._source.id);
+    const itemsQueryBuilder = await this.repositoryMenuItems
+      .createQueryBuilder('entity')
+      .select('DISTINCT entity.merchantId')
+      .where('entity.id IN (:...itemsIds)', { itemsIds });
+    const itemsRawData = await itemsQueryBuilder
+      .getRawMany();
+    extraMerchantsIds = itemsRawData
+      .map(rawData => rawData.merchantId)
+      .filter(merchantId => mainMerchantIds.indexOf(merchantId) === -1);
+    const resultMerchantsIds = [ ...mainMerchantIds, ...extraMerchantsIds];
+    const builder = await this.getQueryBuilder(user, {});
+    builder.select(['entity', 'departments']);
+    builder.andWhere('entity.id IN (:...ids)', { ids:  resultMerchantsIds});
+    const merchants = await builder.getMany();
+    const merchantsAssoc = {};
+    merchants.forEach(merchant => {
+      merchantsAssoc[merchant.id] = merchant;
+    });
+    const merchantsResultList = [];
+    resultMerchantsIds.forEach(merchantId => {
+      const merchant = merchantsAssoc[merchantId];
+      merchantsResultList.push(merchant);
+    });
+    const date = new time.Date();
+    return merchantsResultList.map(
+      merchant => {
+        date.setTimezone(merchant.departments[0].timezone);
+        merchant.departments[0].timezoneOffset = -date.getTimezoneOffset();
+        return merchant;
+      },
+    );
   }
 
   @Get('test-recipient')
@@ -69,7 +138,16 @@ export class MerchantsController extends CrudController {
   @SanitizeUsers('user')
   async loadContentEntities(@User() user: UserEntity, @Query() query) {
     const builder = await this.getQueryBuilder(user, query);
-    return builder.getMany();
+    const date = new time.Date();
+    const merchants = await builder.getMany();
+    return (merchants as MerchantEntity[]).map(
+      merchant => {
+        date.setTimezone(merchant.departments[0].timezone);
+        merchant.departments[0].timezoneOffset = -date.getTimezoneOffset();
+        return merchant;
+      },
+    );
+    // return merchants;
   }
 
   @Get('count')
@@ -112,6 +190,9 @@ export class MerchantsController extends CrudController {
   @UseGuards(ContentEntityNotFoundGuard)
   @SanitizeUser('user')
   async loadMerchant(@ContentEntityParam() entity: MerchantEntity, @User() user: UserEntity) {
+    const date = new time.Date();
+    date.setTimezone(entity.departments[0].timezone);
+    entity.departments[0].timezoneOffset = -date.getTimezoneOffset();
     return entity;
   }
 
@@ -174,6 +255,16 @@ export class MerchantsController extends CrudController {
     }
     try {
       for (const depData of departments) {
+        if (depData.zipcode) {
+          const zipcode = await this.zipcodesService
+            .getZipcodeByZipcode(depData.zipcode);
+          if (zipcode) {
+            depData.zipcodeEntityId = zipcode.id;
+          } else {
+            merchant.enableBooking = false;
+            merchant = await this.repository.save(merchant);
+          }
+        }
         depData.merchantId = merchant.id;
         await this.repositoryDepartments.save(depData);
       }
@@ -246,6 +337,17 @@ export class MerchantsController extends CrudController {
     }
     try {
       for (const depData of departments) {
+        if (depData.zipcode) {
+          const zipcode = await this.zipcodesService
+            .getZipcodeByZipcode(depData.zipcode);
+          if (zipcode) {
+            depData.zipcodeEntityId = zipcode.id;
+          } else {
+            merchant.enableBooking = false;
+            merchant.enableMenu = false;
+            merchant = await this.repository.save(merchant);
+          }
+        }
         depData.merchantId = merchant.id;
         await this.repositoryDepartments.save(depData);
       }
@@ -254,6 +356,10 @@ export class MerchantsController extends CrudController {
     }
     this.sendEmail(merchant.email);
     merchant = await this.repository.findOne(merchant.id);
+    if (merchant.enableMenu && merchant.isPublished) {
+      await this.merchantsSearchService
+        .registerMerchants(merchant);
+    }
     return merchant;
   }
 
@@ -343,10 +449,26 @@ export class MerchantsController extends CrudController {
         fs.unlink(imgPath, () => null);
       }
     }
+    if (newEntity.departments && newEntity.departments.length) {
+      const department = new MerchantDepartmentEntity(newEntity.departments[0]);
+      if (department.zipcode) {
+        const zipcode = await this.zipcodesService
+          .getZipcodeByZipcode(department.zipcode);
+        if (zipcode) {
+          department.zipcodeEntityId = zipcode.id;
+        } else {
+          newEntity.enableBooking = false;
+          newEntity.enableMenu = false;
+        }
+      }
+      await this.repositoryDepartments.save(department);
+    }
     const result = await super.updateContentEntity(user, currentEntity, newEntity);
     this.merchantsService.migrateMenuItems({
       merchantId: currentEntity.id,
     });
+    this.merchantsSearchService
+      .registerMerchants(result as MerchantEntity);
     return result;
   }
 
@@ -423,6 +545,9 @@ export class MerchantsController extends CrudController {
     delete query.hasCreditCard;
     delete query.zipcode;
     delete query.search;
+
+    query.limit = 100;
+
     const builder = await super.getQueryBuilder(user, query);
     builder.leftJoinAndSelect('entity.user', 'user');
     builder.leftJoinAndSelect('entity.departments', 'departments');
@@ -430,10 +555,29 @@ export class MerchantsController extends CrudController {
       builder.innerJoin(PaymentCardEntity, 'card', 'card.authorId = entity.userId');
     }
     if (zipcode) {
-      builder.leftJoin('departments.zipcodeMapDistance', 'zipcodeMapDistance');
-      builder.andWhere('zipcodeMapDistance.destination = :zipcode', { zipcode });
-      builder.addSelect('zipcodeMapDistance.distance');
-      builder.orderBy('zipcodeMapDistance.distance', 'ASC');
+      builder.innerJoin(
+        'departments.zipcodeEntity',
+        'zipcodeEntity',
+        'departments.zipcodeEntityId = zipcodeEntity.id',
+      );
+      builder.innerJoin(
+        'zipcodeEntity.zipcodesDistanceAssoc',
+        'zipcodesDistanceAssoc',
+        'zipcodeEntity.id = zipcodesDistanceAssoc.source',
+      );
+      builder.innerJoin(
+        'zipcodesDistanceAssoc.destinationZipcode',
+        'destinationZipcode',
+        'zipcodesDistanceAssoc.destination = destinationZipcode.id',
+      );
+      builder.andWhere('destinationZipcode.zipcode = :zipcode', { zipcode });
+      builder.addSelect('zipcodesDistanceAssoc.distance');
+      builder.orderBy('zipcodesDistanceAssoc.distance', 'ASC');
+
+      // builder.leftJoin('departments.zipcodeMapDistance', 'zipcodeMapDistance');
+      // builder.andWhere('zipcodeMapDistance.destination = :zipcode', { zipcode });
+      // builder.addSelect('zipcodeMapDistance.distance');
+      // builder.orderBy('zipcodeMapDistance.distance', 'ASC');
     }
     const extraWhere = await this.getWhereRestrictionsByPermissions(user);
     if (extraWhere && extraWhere.isPublished) {
@@ -445,6 +589,7 @@ export class MerchantsController extends CrudController {
         .andWhere(new Brackets(sqb => {
           sqb
             .where('entity.name LIKE :search', { search })
+            .orWhere('entity.email LIKE :search', { search })
             .orWhere('entity.reference LIKE :search', { search })
             .orWhere('entity.id LIKE :search', { search });
         }));

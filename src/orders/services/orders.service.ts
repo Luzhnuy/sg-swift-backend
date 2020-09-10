@@ -288,11 +288,7 @@ export class OrdersService {
   }
 
   public async bookOrder(order: OrderEntity, prices?: OrderPrepareRequestData) {
-    if (!prices) {
-      const data = this.getPrepareRequestData(order);
-      prices = await this.prepareOrder(data);
-    }
-    this.setPricesToOrder(order, prices);
+    await this.prepareForCharge(order, prices);
     if (!order.metadata.paymentMethod || order.metadata.paymentMethod === PaymentMethods.Stripe) {
       const cardUserId = [OrderType.Booking, OrderType.Trip].indexOf(order.type) > -1 ?
         order.merchant.userId : order.customer.userId;
@@ -303,6 +299,25 @@ export class OrdersService {
       order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
     }
     return order;
+  }
+
+  public async bookTripOrders(orders: OrderEntity[]) {
+    let cardUserId;
+    // tslint:disable-next-line:forin
+    for (const i in orders) {
+      const order = orders[i];
+      cardUserId = order.merchant.userId;
+      await this.prepareForCharge(order);
+    }
+    return this.makeTripStripePayment(orders, cardUserId);
+  }
+
+  public async prepareForCharge(order: OrderEntity, prices?: OrderPrepareRequestData) {
+    if (!prices) {
+      const data = this.getPrepareRequestData(order);
+      prices = await this.prepareOrder(data);
+    }
+    this.setPricesToOrder(order, prices);
   }
 
   public async payUserDebt(userId) {
@@ -364,9 +379,7 @@ export class OrdersService {
   }
 
   private async chargeCustomOrder(order: OrderEntity) {
-    const data = this.getPrepareRequestData(order);
-    const prices = await this.prepareOrder(data);
-    this.setPricesToOrder(order, prices);
+    await this.prepareForCharge(order);
     let res;
     const desiredChargedAmount = Math.round(order.metadata.totalAmount * 100);
     if (desiredChargedAmount > 5000) {
@@ -422,6 +435,32 @@ export class OrdersService {
     return order;
   }
 
+  private async makeTripStripePayment(orders: OrderEntity[], userId) {
+    const card = await this.paymentsStripeService.getCardByUser(userId);
+    if (!card) {
+      throw new UnprocessableEntityException('User hasn\'t active credit card');
+    }
+    let merchantName: string;
+    const totalChargedAmount = orders.reduce((sum, order, i) => {
+      if (i === 0) {
+        merchantName = order.merchant.name;
+      }
+      return sum + Math.round(order.metadata.totalAmount * 100);
+    }, 0);
+    const res = await this.paymentsStripeService.makePayment(
+      card.customerId,
+      totalChargedAmount,
+      false,
+      `Trip order for ${merchantName}`,
+    );
+    orders.forEach(order => {
+      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      order.metadata.chargeId = res.id;
+      order.metadata.lastFour = card.last4;
+    });
+    return orders;
+  }
+
   private async addDebt(order: OrderEntity, deptAmount: number) {
     const environment = this.settingsService.getValue(SettingsVariablesKeys.Environment);
     const interval = environment === 'production' ? 24 * 3600 : 300;
@@ -474,6 +513,7 @@ export class OrdersService {
       subtotal: order.metadata.subtotal,
       promoCode: order.metadata.promoCode,
       customAmount: order.metadata.customAmount,
+      arrivalAt: order.arrivalAt,
     };
     return data;
   }

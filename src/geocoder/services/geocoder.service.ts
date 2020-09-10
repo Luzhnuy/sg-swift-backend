@@ -36,7 +36,7 @@ export class GeocoderService {
     return !!count;
   }
 
-  async getDistance(origin, destination) {
+  async getDistance(origin, destination, returnDuration = false) {
     const params = {
       origin: {
         lat: origin.lat,
@@ -47,12 +47,18 @@ export class GeocoderService {
         lng: destination.lon,
       },
     };
-    // const resp = await this.client.directions(params).asPromise();
     const resp = await this.client.directions(params).asPromise();
     if (resp.json.routes.length) {
+      const result: any = returnDuration ? { distance: 0, duration: 0 } : 0;
       return resp.json.routes[0].legs.reduce((res, leg) => {
-        return res + leg.distance.value;
-      }, 0);
+        if (returnDuration) {
+          result.distance += leg.distance.value;
+          result.duration += leg.duration.value;
+        } else {
+          res += leg.distance.value;
+        }
+        return res;
+      }, result);
     } else {
       return -1;
     }
@@ -82,6 +88,12 @@ export class GeocoderService {
       return place.json.result;
     }
     return false;
+  }
+
+  async getAutocompleteByCRZ(country: string, region: string, zipcode: string) {
+    const address = await this.getAddress(`${region} ${zipcode}, ${country}`);
+    // const address = await this.getAddress(`QC H3P, Canada`);
+    return address;
   }
 
   getZipcode(addr: PlaceDetailsResult | GeocodingResult): string {

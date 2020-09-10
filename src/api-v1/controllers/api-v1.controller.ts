@@ -1,8 +1,8 @@
-import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
 import { ApiTokensService } from '../services/api-tokens.service';
 import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
 import { ApiOrdersService, ValidationResult } from '../services/api-orders.service';
-import { CancelOrderData, CreateOrderData, OrdersListRequestData, PrepareOrderData, TrackOrderData } from '../data/misc';
+import { CancelOrderData, CreateOrderData, ErrorResponse, OrdersListRequestData, PrepareOrderData, TrackOrderData } from '../data/misc';
 import { ContentPermissionHelper, ContentPermissionsKeys } from '../../cms/roles-and-permissions/misc/content-permission-helper';
 import { OrderEntity, OrderStatus } from '../../orders/entities/order.entity';
 import { UsersService } from '../../cms/users/services/users.service';
@@ -33,8 +33,12 @@ export class ApiV1Controller {
       throw new UnauthorizedException('You haven\'t permissions to view orders');
     }
     const productionMode = Reflect.getMetadata(this.MetadataProductionModeKey, user);
-    return this.apiOrdersService
+    const result = await this.apiOrdersService
       .getOrdersList(data, user, productionMode);
+    if ((result as ErrorResponse).Code) {
+      throw new BadRequestException(result);
+    }
+    return result;
   }
 
   @Post('order/prepare')
@@ -51,7 +55,7 @@ export class ApiV1Controller {
       return this.apiOrdersService
         .prepareOrder(data, validationResult, user);
     } else {
-      return validationResult;
+      throw new BadRequestException(validationResult);
     }
   }
 
@@ -70,7 +74,7 @@ export class ApiV1Controller {
       return this.apiOrdersService
         .createOrder(tokenEntity, user, productionMode);
     } else {
-      return tokenEntity;
+      throw new BadRequestException(tokenEntity);
     }
   }
 
@@ -82,7 +86,6 @@ export class ApiV1Controller {
     if (!user) {
       throw new UnauthorizedException('You haven\'t permissions to track order');
     }
-    // TODO check production mode
     const valid = this.apiOrdersService
       .validateOrderId(data.Id);
     if (valid === true) {
@@ -90,7 +93,7 @@ export class ApiV1Controller {
       return this.apiOrdersService
         .getTrackingData(parseInt(data.Id, 10), user, productionMode);
     } else {
-      return valid;
+      throw new BadRequestException(valid);
     }
   }
 
@@ -109,7 +112,7 @@ export class ApiV1Controller {
       return this.apiOrdersService
         .cancelOrder(parseInt(data.Id, 10), data.Reason, user, productionMode);
     } else {
-      return valid;
+      throw new BadRequestException(valid);
     }
   }
 

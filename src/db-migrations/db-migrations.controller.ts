@@ -14,4 +14,10 @@ export class DbMigrationsController {
     return this.dbMigrationsService
       .migrateV1();
   }
+
+  @Get('update-default-merchant-menu-active')
+  updateDefaultMerchantMenuActive() {
+    return this.dbMigrationsService
+      .migrateMerchantMenuActive();
+  }
 }

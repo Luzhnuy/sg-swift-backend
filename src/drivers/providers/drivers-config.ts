@@ -5,6 +5,8 @@ import { DriverStatusEntity } from '../entities/driver-status.entity';
 import { ContentPermissionHelper, ContentPermissionsKeys } from '../../cms/roles-and-permissions/misc/content-permission-helper';
 import { UsersPermissionsKeys } from '../../cms/users/services/users-config.service';
 import { RolesAndPermissionsModuleConfig } from '../../cms/roles-and-permissions/misc/roles-and-permissions-module-config';
+import { MerchantEntity } from '../../merchants/entities/merchant.entity';
+import { MerchantsRolesName } from '../../merchants/services/merchants-config.service';
 
 export enum DriversRolesName {
   Driver = 'Driver',
@@ -41,5 +43,6 @@ export class DriversConfig extends RolesAndPermissionsModuleConfig {
     this.addDefPerRole(ContentPermissionsKeys.ContentViewOwn, DriverStatusEntity.name, DriversRolesName.Driver);
     this.addDefPerRole(ContentPermissionsKeys.ContentEditOwn, DriverStatusEntity.name, DriversRolesName.Driver);
     this.addDefPerRoleShort(UsersPermissionsKeys.EditSelfUser, DriversRolesName.Driver);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MerchantEntity.name, DriversRolesName.Driver);
   }
 }

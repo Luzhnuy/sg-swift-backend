@@ -1,9 +1,9 @@
 import { HttpService, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { In, MoreThan, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
-import { ReplaySubject, Subject } from 'rxjs';
-import { OrderDeliveredToEntity } from '../entities/order-delivered-to.entity';
+import { Subject } from 'rxjs';
+import { DeliveryToOptions, OrderDeliveredToEntity } from '../entities/order-delivered-to.entity';
 import { OrderMetadataEntity, PaymentMethods } from '../entities/order-metadata.entity';
 import { InjectStripe } from 'nestjs-stripe';
 import * as Stripe from 'stripe';
@@ -23,6 +23,9 @@ import { PaymentCardEntity } from '../../payments/entities/payment-card.entity';
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { SettingsService } from '../../settings/services/settings.service';
 import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.entity';
+import { MerchantsService } from '../../merchants/services/merchants.service';
+import { PriceCalculatorConstants } from '../entities/price-calculator-constant.entity';
+import { MenuItemEntity } from '../../merchants/entities/menu-item.entity';
 
 @Injectable()
 export class OrdersService {
@@ -38,6 +41,8 @@ export class OrdersService {
       private readonly repositoryOrderDeliveredTo: Repository<OrderDeliveredToEntity>,
     @InjectRepository(MenuSubOptionEntity)
     protected readonly repositorySubOptions: Repository<MenuSubOptionEntity>,
+    @InjectRepository(MenuItemEntity)
+    protected readonly repositoryMenuItems: Repository<MenuItemEntity>,
     @InjectStripe() private readonly stripeClient: Stripe,
     private readonly httpService: HttpService,
     private geocoderService: GeocoderService,
@@ -45,6 +50,7 @@ export class OrdersService {
     private paymentsPayPalService: PaymentsPayPalService,
     private driversService: DriversService,
     private customersService: CustomersService,
+    private merchantsService: MerchantsService,
     private pushNotificationService: OrdersPushNotificationService,
     private priceCalculatorService: OrdersPriceCalculatorService,
     private oldService: OrdersOldService,
@@ -66,19 +72,24 @@ export class OrdersService {
                   await this.payOrderDebt(order, card);
                   await this.schedulerService.removeTask(task);
                 } catch (e) {
+                  // tslint:disable-next-line:no-console
                   console.log(`Order "${task.data}" wasn't charged, when trying to charge debt automatically.`);
+                  // tslint:disable-next-line:no-console
                   console.error(e);
                 }
               } else {
+                // tslint:disable-next-line:no-console
                 console.log(`Order "${task.data}" wasn't charged, because customer still hasn't card`);
               }
             }
           } else {
             await this.schedulerService.removeTask(task);
+            // tslint:disable-next-line:no-console
             console.log(`Debt for order "${task.data}" is already charged, when trying to charge debt automatically`);
           }
         } else {
           await this.schedulerService.removeTask(task);
+          // tslint:disable-next-line:no-console
           console.error(`order "${task.data}" not found, when trying to charge debt automatically`);
         }
       });
@@ -114,14 +125,112 @@ export class OrdersService {
             id: In(subOptionsIds),
           },
         });
+      const subOptionsIdsAssoc = subOptions
+        .reduce((res: any, so) => {
+          res[so.id] = so;
+          return res;
+        }, {});
       order.orderItems
         .forEach(oi => {
           if (oi.subOptionIds) {
             oi.subOptions = oi.subOptionIds
-              .map(soId => subOptions.find(so => so.id === soId));
+              .map(soId => subOptionsIdsAssoc[soId]);
           }
         });
     }
+  }
+
+  public async incrementInventory(order: OrderEntity) {
+    // TODO implement decrement menu items
+  }
+
+  public async decrementInventory(order: OrderEntity) {
+    const toUpdateItems = order.orderItems
+      .reduce((res, oi) => {
+        const mi = oi.menuItem;
+        if (mi.inventory >= 0) {
+          const totalQuantity = order.orderItems
+            .filter(oi2 => oi2.menuItemId === mi.id)
+            .reduce((sum, oi2) => sum + oi2.quantity, 0);
+          mi.inventory = mi.inventory - totalQuantity;
+          if (mi.inventory < 0) {
+            mi.inventory = 0;
+          }
+          if (mi.quantityStopper && mi.inventory === 0) {
+            mi.isPublished = false;
+          }
+          res.push(mi);
+        }
+        return res;
+      }, []);
+    await this.repositoryMenuItems
+      .save(toUpdateItems);
+  }
+
+  public async assignMenuToItems(order: OrderEntity) {
+    const menuItemIds = order.orderItems
+      .map(oi => oi.menuItemId);
+    if (menuItemIds.length) {
+      const menuItems = await this.repositoryMenuItems
+        .find({
+          where: {
+            id: In(menuItemIds),
+          },
+        });
+      const soldOutMenuItem = menuItems
+        .find(mi => {
+          if (mi.isPublished) {
+            if (mi.quantityStopper && mi.inventory >= 0) {
+              const totalQuantity = order.orderItems
+                .filter(oi => oi.menuItemId === mi.id)
+                .reduce((sum, oi) => sum + oi.quantity, 0);
+              return mi.inventory - totalQuantity < 0;
+            } else {
+              return false;
+            }
+          } else {
+            return true;
+          }
+        });
+      if (soldOutMenuItem) {
+        if (soldOutMenuItem.inventory) {
+          throw new UnprocessableEntityException(
+            `Sorry, only ${soldOutMenuItem.inventory} ${soldOutMenuItem.name} left.`,
+          );
+        } else {
+          throw new UnprocessableEntityException(
+            `${soldOutMenuItem.name} is now sold-out. Please remove item from cart`,
+          );
+        }
+      }
+      const menuItemsIdsAssoc = menuItems
+        .reduce((res: any, mi) => {
+          res[mi.id] = mi;
+          return res;
+        }, {});
+      order.orderItems
+        .forEach(oi => {
+          oi.menuItem = menuItemsIdsAssoc[oi.menuItemId];
+        });
+    }
+  }
+
+  public calcOrderItemsPrices(order: OrderEntity) {
+    order
+      .orderItems
+      .forEach(oi => {
+        oi.price = oi.quantity * (
+          oi.menuItem.price
+          + oi.subOptions.reduce(
+            (sum, so) => sum + so.price,
+            0,
+          ));
+      });
+    order.metadata.subtotal = order.orderItems
+      .reduce(
+        (sum, oi) => sum + oi.price,
+        0,
+      );
   }
 
   public async updateOrderStatus(
@@ -155,11 +264,33 @@ export class OrdersService {
       ) {
         if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
           try {
+            if (order.type === OrderType.Booking) {
+              if (deliveryTo.option === DeliveryToOptions.Unavailable && !order.metadata.bringBack) {
+                if (order.metadata.bringBackOnUnavailable) {
+                  order.metadata.bringBackOnUnavailable = true;
+                  order.metadata.deliveryCharge += order.metadata.deliveryCharge * this.priceCalculatorService
+                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+                  order.metadata.serviceFee += order.metadata.serviceFee * this.priceCalculatorService
+                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+                  order.metadata.tps += order.metadata.tps * this.priceCalculatorService
+                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+                  order.metadata.tvq += order.metadata.tvq * this.priceCalculatorService
+                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+                  order.metadata.totalAmount += order.metadata.totalAmount * this.priceCalculatorService
+                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+                } else {
+                  order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+                }
+              } else {
+                order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+              }
+            }
             await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, order.metadata.chargedAmount);
             if (order.metadata.chargeId2) {
               await this.paymentsStripeService.chargeAmount(order.metadata.chargeId2, order.metadata.chargedAmount2 || order.metadata.chargedAmount);
             }
           } catch (e) {
+            // tslint:disable-next-line:no-console
             console.error(e);
           }
         } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
@@ -230,6 +361,7 @@ export class OrdersService {
           ...deliveryTo,
         }));
       } catch (e) {
+        // tslint:disable-next-line:no-console
         console.error(e);
       }
     }
@@ -373,6 +505,12 @@ export class OrdersService {
       distance = await this.geocoderService.getDistance(data.origin, data.destination);
       data.distance = distance;
     }
+    if (data.type === OrderType.Menu) {
+      if (!data.merchant && data.merchantId) {
+        data.merchant = await this.merchantsService
+          .getSingleById(data.merchantId);
+      }
+    }
     const result = await this.priceCalculatorService.prepareOrder(data);
     result.distance = distance;
     return result;
@@ -420,6 +558,18 @@ export class OrdersService {
     let chargedAmount: number;
     if (order.type === OrderType.Custom) {
       chargedAmount = 5000;
+    } else if (order.type === OrderType.Booking) {
+      if (order.metadata.bringBackOnUnavailable && !order.metadata.bringBack) {
+        chargedAmount = Math.round(
+          (
+            order.metadata.totalAmount
+            + order.metadata.totalAmount
+            * this.priceCalculatorService.getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef)
+          ) * 100,
+        );
+      } else {
+        chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      }
     } else {
       chargedAmount = Math.round(order.metadata.totalAmount * 100);
     }
@@ -467,9 +617,9 @@ export class OrdersService {
     order.metadata.debtAmount = deptAmount;
     order.metadata.chargedAmount2 = null;
     const hasDebt = await this.getCustomerDebt(order.customerId);
-    if (hasDebt) {
-      throw new UnprocessableEntityException('User already has debt. Please, pay the Debt!');
-    }
+    // if (hasDebt) {
+    //   throw new UnprocessableEntityException('User already has debt. Please, pay the Debt!');
+    // }
     const scheduledAt = new Date();
     scheduledAt.setTime(scheduledAt.getTime() + interval * 1000);
     const task = new SchedulerTaskEntity({
@@ -481,6 +631,7 @@ export class OrdersService {
     try {
       await this.schedulerService.addTask(task);
     } catch (e) {
+      // tslint:disable-next-line:no-console
       console.error(e);
     }
   }
@@ -506,9 +657,12 @@ export class OrdersService {
       type: order.type,
       largeOrder: order.metadata.largeOrder,
       bringBack: order.metadata.bringBack,
+      bringBackOnUnavailable: order.metadata.bringBackOnUnavailable,
       distance: null,
       extras: null,
       customerId: order.customerId,
+      merchant: order.merchant,
+      merchantId: order.merchantId,
       source: order.source,
       subtotal: order.metadata.subtotal,
       promoCode: order.metadata.promoCode,

@@ -11,6 +11,7 @@ export enum PriceCalculatorConstants {
   BookingDistanceFareMaxDistance = 'Booking distance fare max distance (in meters)',
   BookingLargeOrderFare = 'Booking large order fare',
   BookingBringBackFareKoef = 'Booking bring back fare koef',
+  BookingBringBackFareOnUnavailableKoef = 'Booking bring back fare koef if user is unavailable',
   MenuBaseFare = 'Menu base fare',
   MenuDistanceFareKoef = 'Menu distance fare koef',
   MenuDistanceFareMinDistance = 'Menu distance fare min distance (in meters)',
@@ -37,6 +38,7 @@ PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.BookingDistanceFareMinD
 PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.BookingDistanceFareMaxDistance, 30000);
 PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.BookingLargeOrderFare, 3.33);
 PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.BookingBringBackFareKoef, .55);
+PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef, .8);
 PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.MenuBaseFare, 4.99);
 PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.MenuDistanceFareKoef, 1.5);
 PriceCalculatorDefaultKoefs.set(PriceCalculatorConstants.MenuDistanceFareMinDistance, 3000);

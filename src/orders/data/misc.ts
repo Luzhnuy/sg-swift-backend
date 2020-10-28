@@ -1,4 +1,5 @@
 import { OrderSource, OrderType } from '../entities/order.entity';
+import { MerchantEntity } from '../../merchants/entities/merchant.entity';
 
 export interface OrderExtras {
   baseFare: number;
@@ -30,8 +31,11 @@ export interface OrderPrepareData extends OrderPrepareDistanceData, OrderPrepare
   type: OrderType;
   source?: OrderSource;
   customerId?: number;
+  merchant?: MerchantEntity;
+  merchantId?: number;
   largeOrder?: boolean;
   bringBack?: boolean;
+  bringBackOnUnavailable?: boolean;
 }
 
 export interface OrderPrepareRequestData extends OrderPrepareData {

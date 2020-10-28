@@ -11,6 +11,7 @@ import { CustomersZipcodeEntity } from '../geocoder/entities/customers-zipcode.e
 import { MerchantDepartmentEntity } from '../merchants/entities/merchant-department.entity';
 import { ZipcodesService } from '../geocoder/services/zipcodes.service';
 import { timer } from 'rxjs';
+import { MerchantEntity } from '../merchants/entities/merchant.entity';
 
 @Injectable()
 export class DbMigrationsService {
@@ -31,9 +32,21 @@ export class DbMigrationsService {
     protected readonly repositoryCustomers: Repository<CustomersZipcodeEntity>,
     @InjectRepository(MerchantDepartmentEntity)
     protected readonly repositoryDepartments: Repository<MerchantDepartmentEntity>,
+    @InjectRepository(MerchantEntity)
+    protected readonly repositoryMerchant: Repository<MerchantEntity>,
     private zipcodesService: ZipcodesService,
     private connection: Connection,
   ) {}
+
+  async migrateMerchantMenuActive() {
+    return this.repositoryMerchant
+      .createQueryBuilder('merchant')
+      .update()
+      .set({
+        menuActive: () => 'enableMenu',
+      })
+      .execute();
+  }
 
   async migrateV1() {
     console.log('migrateV1 starting...');
@@ -115,7 +128,8 @@ export class DbMigrationsService {
     await this.repositoryDepartments
       .save(
         departments.map(department => {
-          department.zipcodeEntityId = zipcodesAssoc[department.zipcode];
+          // department.zipcodeEntityId = zipcodesAssoc[department.zipcode];
+          department.zipcodeEntityId = zipcodesAssoc[department.zipcode].id;
           return department;
         }),
       );

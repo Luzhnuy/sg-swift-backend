@@ -7,6 +7,7 @@ export enum DeliveryToOptions {
   Neighbour = 'Neighbour',
   Reception = 'Reception',
   Other = 'Other',
+  Unavailable = 'Unavailable',
 }
 
 @Entity()
@@ -35,6 +36,15 @@ export class OrderDeliveredToEntity extends ContentEntity {
 
   @Column({ nullable: true, default: null })
   phone: string;
+
+  @Column({ nullable: true, default: null })
+  idType: string;
+
+  @Column({ nullable: true, default: null })
+  idNumber: string;
+
+  @Column({ nullable: true, default: null })
+  birthDate: string;
 
   constructor(init?: Partial<OrderDeliveredToEntity>) {
     super();

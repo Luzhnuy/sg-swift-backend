@@ -86,6 +86,7 @@ export class MerchantsConfigService extends RolesAndPermissionsModuleConfig {
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuCategoryEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuItemEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuItemEntity.name, RolesAndPermissionsRolesName.Anonymous);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewUnpublished, MenuItemEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MerchantEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MerchantEntity.name, RolesAndPermissionsRolesName.Anonymous);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuOptionEntity.name, RolesAndPermissionsRolesName.Anonymous);

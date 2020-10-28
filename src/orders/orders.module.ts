@@ -36,6 +36,7 @@ import { MenuSubOptionEntity } from '../merchants/entities/menu-sub-option.entit
 import { TestOrdersService } from './services/test-orders.service';
 import { TestOrderEntity } from './entities/test-order.entity';
 import { TestOrderMetadataEntity } from './entities/test-order-metadata.entity';
+import { MenuItemEntity } from '../merchants/entities/menu-item.entity';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { TestOrderMetadataEntity } from './entities/test-order-metadata.entity';
       OrderDeliveredToEntity,
       PriceCalculatorConstantEntity,
       MenuSubOptionEntity,
+      MenuItemEntity,
       TestOrderEntity,
       TestOrderMetadataEntity,
     ]),

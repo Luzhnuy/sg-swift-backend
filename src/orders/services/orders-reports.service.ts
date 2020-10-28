@@ -175,18 +175,18 @@ export class OrdersReportsService {
     const startDateStr = this.formatDateShort(startDate);
     const endDateStr = this.formatDateShort(endDate);
     const commission = data.commission / 100;
-    const totalCharged = parseInt(data.chargedAmount || '0', 10);
-    const totalCommissionCharged = totalCharged * commission;
-    const totalEarnedCharged = totalCharged - totalCommissionCharged;
-
-    const subTotal = this.formatNumber(data.subtotal);
-    const netSubtotal = this.formatNumber(parseFloat(data.subtotal.toString() || '0') * commission);
     const commissionPercent = data.commission.toString();
-    const tps = this.formatNumber(data.tps);
-    const tvq = this.formatNumber(data.tvq);
-    const total = this.formatNumber(totalCharged / 100);
-    const commissionedTotal = this.formatNumber(totalCommissionCharged / 100);
-    const earnedTotal = this.formatNumber(totalEarnedCharged / 100);
+
+    const subtotalSold = this.formatNumber(data.subtotal);
+    const subtotalSoldFloat = parseFloat(data.subtotal);
+    const salesCommissionFloat = commission * subtotalSoldFloat;
+    const salesCommission = this.formatNumber(salesCommissionFloat);
+    const netSubtotalFloat = subtotalSoldFloat - salesCommissionFloat;
+    const netSubtotal = this.formatNumber(netSubtotalFloat);
+    const tpsEarned = this.formatNumber((1 - commission) * parseFloat(data.tps));
+    const tvqEarned = this.formatNumber((1 - commission) * parseFloat(data.tvq));
+    const totalEarned = this.formatNumber(netSubtotalFloat + tpsEarned + tvqEarned);
+    const totalTransferred = totalEarned;
 
     const headerHtml = this.getHeaderImageHtml();
     const html = `
@@ -210,7 +210,7 @@ ${headerHtml}
 Subtotal Sold
 </td>
 <td style="width: 15%; text-align: left;">
-CAD$ ${ subTotal }
+CAD$ ${ subtotalSold }
 </td>
 </tr>
 <tr>
@@ -218,7 +218,7 @@ CAD$ ${ subTotal }
 Sale Commission (%${ commissionPercent })
 </td>
 <td style="width: 25%; text-align: left;">
-CAD$ ${ commissionedTotal }
+CAD$ ${ salesCommission }
 </td>
 </tr>
 <tr>
@@ -234,7 +234,7 @@ CAD$ ${ netSubtotal }
 TPS
 </td>
 <td style="width: 25%; text-align: left;">
-CAD$ ${ tps }
+CAD$ ${ tpsEarned }
 </td>
 </tr>
 <tr>
@@ -242,7 +242,7 @@ CAD$ ${ tps }
 TVQ
 </td>
 <td style="width: 25%; text-align: left;">
-CAD$ ${ tvq }
+CAD$ ${ tvqEarned }
 </td>
 </tr>
 <tr>
@@ -250,7 +250,7 @@ CAD$ ${ tvq }
 Total Earned
 </td>
 <td style="width: 25%; text-align: left;">
-CAD$ ${ total }
+CAD$ ${ totalEarned }
 </td>
 </tr>
 <tr>
@@ -258,7 +258,7 @@ CAD$ ${ total }
 Total Transfered to account
 </td>
 <td style="width: 25%; text-align: left;">
-CAD$ ${ earnedTotal }
+CAD$ ${ totalTransferred }
 </td>
 </tr>
 </table>

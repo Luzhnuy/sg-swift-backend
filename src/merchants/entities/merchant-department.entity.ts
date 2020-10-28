@@ -34,9 +34,9 @@ export class MerchantDepartmentEntity extends ContentEntity {
   @Column('text', { nullable: true, default: null })
   street: string;
 
-  // @ManyToOne(type => MapDistanceEntity)
-  // @JoinColumn({ referencedColumnName: 'source', name: 'zipcode' })
-  // zipcodeMapDistance: MapDistanceEntity;
+  @ManyToOne(type => MapDistanceEntity)
+  @JoinColumn({ referencedColumnName: 'source', name: 'zipcode' })
+  zipcodeMapDistance: MapDistanceEntity;
 
   @Column('varchar', { nullable: true, default: null, length: 3 })
   zipcode: string;

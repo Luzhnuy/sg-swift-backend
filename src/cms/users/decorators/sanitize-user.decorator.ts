@@ -9,6 +9,8 @@ export const SanitizeUser = (userField?: string, strong = true) => {
       if (user) {
         user.password = null;
         delete user.password;
+        user.skipHashPassword = null;
+        delete user.skipHashPassword;
         user.solt = null;
         delete user.solt;
         user.useSha1 = null;

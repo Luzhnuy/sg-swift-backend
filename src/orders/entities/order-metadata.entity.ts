@@ -32,6 +32,9 @@ export class OrderMetadataEntity {
   @Column({ default: null, nullable: true })
   bringBack: boolean;
 
+  @Column({ default: null, nullable: true })
+  bringBackOnUnavailable: boolean;
+
   // Amounts
   @Column('decimal', { precision: 8, scale: 2, default: null, nullable: true, transformer: ColumnNumericTransformer })
   deliveryCharge: number;

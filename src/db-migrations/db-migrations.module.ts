@@ -14,6 +14,7 @@ import { MerchantsZipcodeEntity } from '../geocoder/entities/merchants-zipcode.e
 import { CustomersZipcodeEntity } from '../geocoder/entities/customers-zipcode.entity';
 import { MerchantDepartmentEntity } from '../merchants/entities/merchant-department.entity';
 import { DbMigrationsController } from './db-migrations.controller';
+import { MerchantEntity } from '../merchants/entities/merchant.entity';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DbMigrationsController } from './db-migrations.controller';
       MerchantsZipcodeEntity,
       CustomersZipcodeEntity,
       MerchantDepartmentEntity,
+      MerchantEntity,
     ]),
     SharedModule,
     MerchantsModule,

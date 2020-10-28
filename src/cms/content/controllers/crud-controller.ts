@@ -228,7 +228,11 @@ export class CrudController {
     delete query.order;
     const queryKeys = Object.keys(query);
     queryKeys.forEach(key => {
-      builder.andWhere(`entity.${key} = :${key}`, query);
+      if (Array.isArray(query[key])) {
+        builder.andWhere(`entity.${key} IN(:...${key})`, query);
+      } else {
+        builder.andWhere(`entity.${key} = :${key}`, query);
+      }
     });
     return builder;
   }

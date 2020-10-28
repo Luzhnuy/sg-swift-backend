@@ -52,7 +52,13 @@ export class OrdersPriceCalculatorService {
   }
 
   private async calcMenuOrder(data: OrderPrepareRequestData) {
-    data.extras = this.getMenuExtras(data.distance, data.scheduledTime);
+    const merchant = data.merchant;
+    data.extras = this.getMenuExtras(
+      data.distance,
+      data.scheduledTime,
+      merchant && merchant.priceOverride ? merchant.priceOverride : this.getConstant(PriceCalculatorConstants.MenuBaseFare),
+      merchant && merchant.distanceOverride ? merchant.distanceOverride : this.getConstant(PriceCalculatorConstants.MenuDistanceFareMinDistance),
+    );
     data.deliveryCharge = this.calcExtras(data.extras);
     return await this.calcTaxes(data);
   }
@@ -67,7 +73,12 @@ export class OrdersPriceCalculatorService {
     }, 0);
   }
 
-  private getBookingExtras(distance = 0, scheduledTime = 0, bringBack = false, largeOrder = false): OrderExtras {
+  private getBookingExtras(
+    distance = 0,
+    scheduledTime = 0,
+    bringBack = false,
+    largeOrder = false,
+  ): OrderExtras {
     const extras: OrderExtras = {
       baseFare: 0,
       distanceFare: 0,
@@ -170,21 +181,26 @@ export class OrdersPriceCalculatorService {
     return extras;
   }
 
-  private getMenuExtras(distance = 0, scheduledTime = 0): OrderExtras {
+  private getMenuExtras(
+    distance = 0,
+    scheduledTime = 0,
+    baseFare = this.getConstant(PriceCalculatorConstants.MenuBaseFare),
+    distanceFareMinDistance = this.getConstant(PriceCalculatorConstants.MenuDistanceFareMinDistance),
+  ): OrderExtras {
     const extras: OrderExtras = {
       baseFare: 0,
       distanceFare: 0,
       largeOrderFare: 0,
       surgeTime: false,
     };
-    extras.baseFare = this.getConstant(PriceCalculatorConstants.MenuBaseFare);
-    if (distance > this.getConstant(PriceCalculatorConstants.MenuDistanceFareMinDistance)) {
-      const km = (
-        distance >
-        this.getConstant(PriceCalculatorConstants.MenuDistanceFareMaxDistance) ?
-          this.getConstant(PriceCalculatorConstants.MenuDistanceFareMaxDistance) :
-          (distance - this.getConstant(PriceCalculatorConstants.MenuDistanceFareMinDistance))
-      ) / 1000;
+    extras.baseFare = baseFare;
+    let distanceDiff = distance - distanceFareMinDistance;
+    if (distanceDiff > 0) {
+      const distanceFareMaxDistance = this.getConstant(PriceCalculatorConstants.MenuDistanceFareMaxDistance);
+      if (distanceDiff > distanceFareMaxDistance) {
+        distanceDiff = distanceFareMaxDistance;
+      }
+      const km = distanceDiff / 1000;
       extras.distanceFare = km * this.getConstant(PriceCalculatorConstants.MenuDistanceFareKoef);
     }
     extras.surgeTime = this.isSurgeTime(scheduledTime);

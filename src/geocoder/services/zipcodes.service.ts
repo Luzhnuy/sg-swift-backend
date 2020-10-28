@@ -85,7 +85,9 @@ export class ZipcodesService {
     const builder = await this.repository
       .createQueryBuilder('zipcode')
       .select(['id', 'regionId', 'latitude', 'longitude',
-        `( 6371 * acos ( cos ( radians(${ zipcode.latitude }) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians(${ zipcode.longitude }) ) + sin ( radians(${ zipcode.latitude }) ) * sin( radians( latitude ) ) ) ) AS distance`,
+        `( 6371 * acos ( cos ( radians(${ zipcode.latitude }) ) * cos( radians( latitude ) ) * cos( radians( longitude )
+          - radians(${ zipcode.longitude }) ) + sin ( radians(${ zipcode.latitude }) ) * sin( radians( latitude ) ) ) )
+        AS distance`,
       ])
       .where('id != :id', { id: zipcode.id }) // TODO map distances assoc doesn't not exists
       // .andWhere('') // TODO map distances assoc doesn't not exists

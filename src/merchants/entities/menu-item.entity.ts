@@ -1,4 +1,4 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index, ManyToMany, JoinTable } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, ManyToMany, JoinTable, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { ContentEntity } from '../../cms/content/entities/content.entity';
 import { MerchantEntity } from './merchant.entity';
 import { MenuCategoryEntity } from './menu-category.entity';
@@ -53,6 +53,12 @@ export class MenuItemEntity extends ContentEntity {
 
   @Column('boolean', { default: false })
   isWaiting: boolean;
+
+  @Column('smallint', { default: -1 })
+  inventory: number;
+
+  @Column('boolean', { default: false })
+  quantityStopper: boolean;
 
   constructor(data: Partial<MenuItemEntity>) {
     super();

@@ -273,6 +273,11 @@ export class OrdersController extends CrudController {
         await this.setCustomerToOrder(entity, user);
         break;
     }
+    if (entity.type === OrderType.Menu && entity.orderItems && entity.orderItems.length) {
+      await this.ordersService.assignSubOptionsToItems(entity);
+      await this.ordersService.assignMenuToItems(entity);
+      this.ordersService.calcOrderItemsPrices(entity);
+    }
     entity = await this.ordersService.bookOrder(entity);
     const customerPhoto = entity.metadata.customerPhoto;
     entity.metadata.customerPhoto = null;
@@ -282,9 +287,9 @@ export class OrdersController extends CrudController {
         oi.orderId = order.id;
         return oi;
       });
-      await this.ordersService
-        .assignSubOptionsToItems(order);
       await this.repositoryOrdersItems.save(orderItems);
+      await this.ordersService
+        .decrementInventory(order);
     }
     if (customerPhoto) {
       const path = this.saveCustomerPhoto(customerPhoto, order.id);
@@ -909,13 +914,35 @@ export class OrdersController extends CrudController {
     builder.addSelect('merchant.name', 'name');
     builder.addSelect('departments.address', 'address');
     builder.groupBy('departments.id');
-    const { name, commission, address, subtotal, tps, tvq, chargedAmount } = await builder.getRawOne();
-    const stream: any = await this.reportsService
-      .convertToInvoicePdf(
-        { name, commission, address, subtotal, tps, tvq, chargedAmount },
-        startDate, endDate, timezoneOffset,
-      );
-    stream.pipe(res);
+    builder.andWhere('entity.status = :status', { status: OrderStatus.Completed });
+    const rawData = await builder.getRawOne();
+    if (rawData) {
+      const { name, commission, address, subtotal, tps, tvq, chargedAmount } = rawData;
+      const stream: any = await this.reportsService
+        .convertToInvoicePdf(
+          { name, commission, address, subtotal, tps, tvq, chargedAmount },
+          startDate, endDate, timezoneOffset,
+        );
+      stream.pipe(res);
+    } else {
+      const merchant = await this.merchantsService
+        .getMerchantByUserId(user.id);
+      const data = {
+        name: merchant.name,
+        commission: merchant.commission,
+        address: merchant.departments[0].address,
+        subtotal: '0',
+        tps: '0',
+        tvq: '0',
+        chargedAmount: '0',
+      };
+      const stream: any = await this.reportsService
+        .convertToInvoicePdf(
+          data,
+          startDate, endDate, timezoneOffset,
+        );
+      stream.pipe(res);
+    }
   }
 
   @Get('send-receipt/:id')

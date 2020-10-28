@@ -251,6 +251,8 @@ export class MerchantsController extends CrudController {
     try {
       merchant = await this.repository.save(merchant);
     } catch (e) {
+      await this.usersService
+        .removeUser(merchant.user.id);
       throw new InternalServerErrorException(e.toString());
     }
     try {

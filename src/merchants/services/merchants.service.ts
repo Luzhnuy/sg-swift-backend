@@ -28,9 +28,9 @@ export class MerchantsService {
       .removeAllMerchants();
   }
 
-  async searchMenuItems(query: string) {
+  async searchMenuItems(query: string, merchantId?: string) {
     return this.itemsSearchService
-      .searchMenuItem(query);
+      .searchMenuItem(query, merchantId);
   }
 
   async searchMerchants(query: string) {
@@ -42,7 +42,7 @@ export class MerchantsService {
     const builder = await this.menuItemEntityRepository
       .createQueryBuilder('item')
       .select(['item.id', 'item.name', 'item.description', 'item.isPublished', 'item.isWaiting',
-        'merchant.isPublished', 'merchant.enableMenu', 'category.isPublished'])
+        'merchant.isPublished', 'merchant.enableMenu', 'category.isPublished', 'item.categoryId', 'item.merchantId'])
       .innerJoin('item.category', 'category')
       .innerJoin('item.merchant', 'merchant');
     if (data) {
@@ -106,6 +106,10 @@ export class MerchantsService {
 
   get(params) {
     return this.repository.findOne(params);
+  }
+
+  getSingleById(id: number) {
+    return this.repository.findOne( { id });
   }
 
 }

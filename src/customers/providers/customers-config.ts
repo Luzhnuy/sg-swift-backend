@@ -53,6 +53,7 @@ export class CustomersConfig extends RolesAndPermissionsModuleConfig {
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuCategoryEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuItemEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MenuItemEntity.name, CustomersRolesName.Customer);
+    this.addDefPerRole(ContentPermissionsKeys.ContentViewUnpublished, MenuItemEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MerchantEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewPublished, MerchantEntity.name, CustomersRolesName.Customer);
     this.addDefPerRole(ContentPermissionsKeys.ContentViewAll, MenuOptionEntity.name, CustomersRolesName.Customer);

@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, OneToMany, OneToOne, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, OneToMany, OneToOne, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { ContentEntity } from '../../cms/content/entities/content.entity';
 import { MerchantDepartmentEntity } from './merchant-department.entity';
 import { UserEntity } from '../../cms/users/entities/user.entity';
@@ -55,7 +55,31 @@ export class MerchantEntity extends ContentEntity {
   enableMenu: boolean;
 
   @Column('boolean', { default: false })
+  menuActive: boolean;
+
+  @Column('boolean', { default: false })
   isWaiting: boolean;
+
+  // @Column('boolean', { default: false })
+  // bringBack: boolean;
+
+  @Column('boolean', { default: false })
+  ageVerification: boolean;
+
+  @Column('decimal', {
+    precision: 7,
+    scale: 2,
+    default: 0,
+    nullable: false,
+    transformer: ColumnNumericTransformer,
+  })
+  priceOverride: number = 0;
+
+  @Column('mediumint', {
+    nullable: false,
+    default: 0,
+  })
+  distanceOverride: number;
 
   @Column('boolean', { default: true })
   subscribedOnReceipt: boolean;
@@ -64,6 +88,11 @@ export class MerchantEntity extends ContentEntity {
     default: 0,
   })
   commission: number;
+
+  @Column('mediumint', {
+    default: 0,
+  })
+  maxDistance: number;
 
   @OneToMany(type => MerchantDepartmentEntity, department => department.merchant, {
     eager: true,

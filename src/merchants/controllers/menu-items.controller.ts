@@ -57,7 +57,7 @@ export class MenuItemsController extends CrudController {
     @Query() query,
   ) {
     if (query.query) {
-      const hits: any[] = await this.merchantsService.searchMenuItems(query.query);
+      const hits: any[] = await this.merchantsService.searchMenuItems(query.query, query.merchantId);
       if (hits.length === 0) {
         return [];
       }
@@ -67,6 +67,7 @@ export class MenuItemsController extends CrudController {
       const builder = await this.getQueryBuilder(user, query);
       builder.select('entity');
       builder.andWhere('entity.id IN (:...ids)', { ids: itemsIds });
+      builder.take(hits.length);
       let items = await builder.getMany();
       const itemsAssoc = {};
       items.forEach(item => {
@@ -190,13 +191,25 @@ export class MenuItemsController extends CrudController {
   }
 
   protected async getQueryBuilder(user, query) {
+    const limit = query.limit;
+    const offset = query.offset;
+    const orderBy = query.orderBy;
+    const orderDirection = query.orderDirection;
+    query.limit = null;
+    query.offset = null;
+    query.orderBy = null;
+    query.orderDirection = null;
+    delete query.limit;
+    delete query.offset;
+    delete query.orderBy;
+    delete query.orderDirection;
     let searchQuery: string = query.query ? query.query.trim() : null;
     delete query.query;
     const builder = await super.getQueryBuilder(user, query);
     const secureWhere = await this.getWhereRestrictionsByPermissions(user);
     if (secureWhere && secureWhere.isPublished) {
       builder.andWhere('entity.isWaiting = :isWaiting', { isWaiting: false });
-      builder.andWhere('entity.isPublished = :isPublished', { isPublished: true });
+      // builder.andWhere('entity.isPublished = :isPublished', { isPublished: true });
       builder.innerJoinAndSelect('entity.merchant', 'merchant');
       builder.andWhere('merchant.isPublished = :isPublished', { isPublished: true });
       builder.andWhere('merchant.enableMenu = :menuEnabled', { menuEnabled: true });
@@ -213,6 +226,15 @@ export class MenuItemsController extends CrudController {
       const searchQueries = searchQueryParts.join(' ');
       searchQuery = `(${searchQuery}) (${searchQueries})`;
       builder.andWhere(`MATCH(entity.name) AGAINST (:searchQuery IN BOOLEAN MODE)`, { searchQuery });
+    }
+    if (limit && limit < 200) {
+      builder.take(limit);
+    }
+    if (offset) {
+      builder.skip(offset);
+    }
+    if (orderBy && orderDirection) {
+      builder.orderBy(orderBy, orderDirection.toUpperCase());
     }
     return builder;
   }

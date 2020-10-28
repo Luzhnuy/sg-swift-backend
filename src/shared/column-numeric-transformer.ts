@@ -2,10 +2,11 @@
 export const ColumnNumericTransformer = {
 
   to: (data) => {
-    if (typeof data !== 'undefined' && data !== null) {
-      return data;
-    }
-    return null;
+    return data;
+    // if (typeof data !== 'undefined' && data !== null) {
+    //   return data;
+    // }
+    // return null;
   },
 
   from: (data) => {

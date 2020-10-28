@@ -12,7 +12,7 @@ export class ItemsSearchService {
     private readonly elasticsearchService: ElasticsearchService,
   ) {}
 
-  public async searchMenuItem(query: string) {
+  public async searchMenuItem(query: string, merchantId?: string) {
     const queryParts = query
       .trim()
       .toLowerCase()
@@ -63,6 +63,20 @@ export class ItemsSearchService {
         );
       }
     });
+    const filterQuery: any = [
+      {
+        term: {
+          isPublished: true,
+        },
+      },
+    ];
+    if (merchantId) {
+      filterQuery.push({
+        term: {
+          merchantId,
+        },
+      });
+    }
     const { body } = await this.elasticsearchService
       .search({
         index: this.MenuItemIndex,
@@ -72,11 +86,7 @@ export class ItemsSearchService {
           query: {
             bool: {
               should: shouldQuery,
-              filter: {
-                term: {
-                  isPublished: true,
-                },
-              },
+              filter: filterQuery,
               minimum_should_match : 1,
             },
           },
@@ -97,6 +107,8 @@ export class ItemsSearchService {
           isPublished: this.isMenuItemPublished(item),
           name: item.name,
           description: item.description,
+          categoryId: item.categoryId,
+          merchantId: item.merchantId,
         },
       };
       await this.elasticsearchService
@@ -115,8 +127,8 @@ export class ItemsSearchService {
     }
   }
 
-  public async removeAll() {
-    return await this.elasticsearchService
+  public removeAll() {
+    return this.elasticsearchService
       .deleteByQuery( {
         index: this.MenuItemIndex,
         body: {

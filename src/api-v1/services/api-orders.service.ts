@@ -320,6 +320,7 @@ export class ApiOrdersService {
         lat: merchant.departments[0].latitude,
         lon: merchant.departments[0].longitude,
       },
+      merchant,
     };
     const prepareResponse = await this.ordersService
       .prepareOrder(prepareRequest);

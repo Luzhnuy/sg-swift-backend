@@ -36,6 +36,12 @@ export class MenuCategoriesController extends CrudController {
     return builder.getMany();
   }
 
+  @Get('lite')
+  async loadContentEntitiesLite(@User() user: UserEntity, @Query() query: any) {
+    const builder = await this.getQueryBuilderLite(user, query);
+    return builder.getMany();
+  }
+
   @Put(':id')
   @UseGuards(ContentPermissionsGuard(isOwner => {
     if (isOwner) {
@@ -85,6 +91,25 @@ export class MenuCategoriesController extends CrudController {
       builder.andWhere('merchant.isPublished = :isPublished', { isPublished: true });
       builder.andWhere('merchant.enableMenu = :menuEnabled', { menuEnabled: true });
     }
+    return builder;
+  }
+
+  protected async getQueryBuilderLite(user, query) {
+    delete query.hasCreditCard;
+    const builder = await super.getQueryBuilder(user, query);
+    builder
+      .innerJoin('entity.items', 'items');
+    const secureWhere = await this.getWhereRestrictionsByPermissions(user);
+    if (secureWhere && secureWhere.isPublished) {
+      // builder.andWhere('items.isPublished = :isPublished', { isPublished: true });
+      builder.andWhere('items.isWaiting = :isWaiting', { isWaiting: false });
+      builder.innerJoin('entity.merchant', 'merchant');
+      builder.andWhere('merchant.isPublished = :isPublished', { isPublished: true });
+      builder.andWhere('merchant.enableMenu = :menuEnabled', { menuEnabled: true });
+    }
+    builder.loadRelationCountAndMap('entity.itemsCount', 'entity.items');
+    builder.take(100);
+    builder.skip(0);
     return builder;
   }
 }

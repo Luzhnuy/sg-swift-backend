@@ -15,7 +15,7 @@ import { GeocoderModule } from './geocoder/geocoder.module';
 import { SmsActivationModule } from './sms-activation/sms-activation.module';
 import { CustomersModule } from './customers/customers.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
-import { OldDatabaseModule } from './old-database/old-database.module';
+// import { OldDatabaseModule } from './old-database/old-database.module';
 import { Environment } from './environment';
 import { SendGridModule, SendGridModuleOptions } from '@anchan828/nest-sendgrid';
 import { SettingsService } from './settings/services/settings.service';
@@ -24,7 +24,7 @@ import { SettingsVariablesKeys } from './settings/providers/settings-config';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { ApiV1Module } from './api-v1/api-v1.module';
 import { DbMigrationsModule } from './db-migrations/db-migrations.module';
-import { DistancesController } from './geocoder/controllers/distances.controller';
+// import { DistancesController } from './geocoder/controllers/distances.controller';
 
 @Module({
   imports: [
@@ -66,7 +66,7 @@ import { DistancesController } from './geocoder/controllers/distances.controller
     SmsActivationModule,
     CustomersModule,
     PromoCodesModule,
-    OldDatabaseModule,
+    // OldDatabaseModule,
     SchedulerModule,
     ApiV1Module,
     DbMigrationsModule,

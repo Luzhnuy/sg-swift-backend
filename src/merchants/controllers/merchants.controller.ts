@@ -548,7 +548,7 @@ export class MerchantsController extends CrudController {
     delete query.zipcode;
     delete query.search;
 
-    query.limit = 100;
+    query.limit = query.limit || 100;
 
     const builder = await super.getQueryBuilder(user, query);
     builder.leftJoinAndSelect('entity.user', 'user');

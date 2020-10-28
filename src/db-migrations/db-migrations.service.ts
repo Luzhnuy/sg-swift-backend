@@ -86,14 +86,16 @@ export class DbMigrationsService {
         console.log('ERROR 1 :: ', zipcodes[i].zipcode, e);
       }
     }
+    console.log('saving zipcodes.......');
     // return { here: true };
     zipcodes = await this.repositoryZipcodes
       .save(zipcodes);
+    console.log('zipcodes saved successfully');
     const zipcodesAssoc = zipcodes.reduce((res: { [key: string]: ZipcodeEntity}, zipcode: ZipcodeEntity) => {
       res[zipcode.zipcode] = zipcode;
       return res;
     }, {});
-    console.log('creating zipcode distance assocs');
+    console.log('creating zipcode distance assocs .......');
     const zdas: ZipcodesDistanceAssocEntity[] = mapDistances.map(mp => {
       const zda = new ZipcodesDistanceAssocEntity({
         source: zipcodesAssoc[mp.source].id,
@@ -103,36 +105,49 @@ export class DbMigrationsService {
       });
       return zda;
     });
+    console.log('saving zipcode distance assocs.......');
     await this.repositoryZDA
       .save(zdas);
-    console.log('creating zipcodes lists');
+    console.log('zipcodes distance assocs saved successfully');
+    console.log('creating zipcodes lists..........');
     const customerZipcodes = await this.repositoryCustomers
+      .find();
+    const merchantsZipcodes = await this.repositoryMerchants
       .find();
     const customerZipcodesList = new ZipcodesListEntity({
       type: ZipcodeListType.Customers,
       zipcodes: customerZipcodes.map(cz => zipcodesAssoc[cz.zipcode]),
     });
-    await this.repositoryZipcodesLists
-      .save(customerZipcodesList);
-    const merchantsZipcodes = await this.repositoryMerchants
-      .find();
     const merchantZipcodesList = new ZipcodesListEntity({
       type: ZipcodeListType.Merchants,
       zipcodes: merchantsZipcodes.map(cz => zipcodesAssoc[cz.zipcode]),
     });
+    console.log('saving zipcodes lists.......');
+    await this.repositoryZipcodesLists
+      .save(customerZipcodesList);
     await this.repositoryZipcodesLists
       .save(merchantZipcodesList);
+    console.log('zipcodes lists saved successfully');
     console.log('updating merchants departments');
     const departments = await this.repositoryDepartments
       .find();
+    console.log('saving merchants departments.......');
     await this.repositoryDepartments
       .save(
-        departments.map(department => {
+        departments.reduce((res, department) => {
+          if (zipcodesAssoc[department.zipcode]) {
+            department.zipcodeEntityId = zipcodesAssoc[department.zipcode].id;
+            res.push(department)
+          } else {
+            console.log('department zipcode not found :: ', department);
+          }
+          return res;
           // department.zipcodeEntityId = zipcodesAssoc[department.zipcode];
-          department.zipcodeEntityId = zipcodesAssoc[department.zipcode].id;
-          return department;
-        }),
+          // return department;
+        }, []),
       );
+    console.log('merchants departments save successfully');
+    console.log('deleting index........');
     const manager = this.connection
       .createEntityManager();
     const keys = await manager.query('SHOW INDEX IN merchant_department_entity WHERE Column_name = \'zipcode\';');
@@ -142,6 +157,7 @@ export class DbMigrationsService {
     } finally {
       await manager.query('DROP INDEX `' + key + '` ON `merchant_department_entity`;');
     }
+    console.log('Index deleted successfully');
     return { success: true };
   }
 }

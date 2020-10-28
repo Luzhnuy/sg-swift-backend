@@ -221,7 +221,7 @@ export class CrudController {
       query.page = 0;
     }
     builder.take(query.limit);
-    builder.skip(query.page);
+    builder.skip(query.limit * query.page);
     delete query.limit;
     delete query.page;
     delete query.orderBy;

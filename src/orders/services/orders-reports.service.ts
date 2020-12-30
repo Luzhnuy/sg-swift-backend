@@ -177,14 +177,14 @@ export class OrdersReportsService {
     const commission = data.commission / 100;
     const commissionPercent = data.commission.toString();
 
-    const subtotalSold = this.formatNumber(data.subtotal);
     const subtotalSoldFloat = parseFloat(data.subtotal);
+    const subtotalSold = this.formatNumber(subtotalSoldFloat);
     const salesCommissionFloat = commission * subtotalSoldFloat;
     const salesCommission = this.formatNumber(salesCommissionFloat);
     const netSubtotalFloat = subtotalSoldFloat - salesCommissionFloat;
     const netSubtotal = this.formatNumber(netSubtotalFloat);
-    const tpsEarned = this.formatNumber((1 - commission) * parseFloat(data.tps));
-    const tvqEarned = this.formatNumber((1 - commission) * parseFloat(data.tvq));
+    const tpsEarned = this.formatNumber(0.05 * netSubtotalFloat);
+    const tvqEarned = this.formatNumber( 0.09975 * netSubtotalFloat);
     const totalEarned = this.formatNumber(netSubtotalFloat + tpsEarned + tvqEarned);
     const totalTransferred = totalEarned;
 

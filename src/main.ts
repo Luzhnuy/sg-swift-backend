@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { WsAdapter } from '@nestjs/platform-ws';
 import * as bodyParser from 'body-parser';
 import * as express from 'express';
+import * as cookieParser from 'cookie-parser';
 import { join } from 'path';
 
 async function bootstrap() {
@@ -12,6 +13,8 @@ async function bootstrap() {
   app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
   app.use('//uploads', express.static(join(__dirname, '..', 'uploads')));
   app.use('///uploads', express.static(join(__dirname, '..', 'uploads')));
+  app.use('/locales', express.static(join(__dirname, '..', 'locales')));
+  app.use(cookieParser());
   await app.listen(3000);
 }
 bootstrap();

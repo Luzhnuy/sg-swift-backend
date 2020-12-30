@@ -7,7 +7,7 @@ import {
   Param,
   Post,
   Put,
-  Query,
+  Query, Req, Res,
   UnauthorizedException,
   UnprocessableEntityException,
   UseGuards,
@@ -23,7 +23,7 @@ import { ContentEntityParam } from '../../cms/content/decorators/content-entity-
 import { ContentEntity } from '../../cms/content/entities/content.entity';
 import { SanitizeUser, SanitizeUsers } from '../../cms/users/decorators/sanitize-user.decorator';
 import { CustomerEntity } from '../entities/customer.entity';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Column, JoinColumn, OneToOne, Repository } from 'typeorm';
 import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
 import { UsersService } from '../../cms/users/services/users.service';
 import { SmsActivationService } from '../../sms-activation/services/sms-activation.service';
@@ -42,6 +42,12 @@ import { EmailSenderService } from '../../email-distributor/services/email-sende
 import * as fs from 'fs';
 import { OrderEntity } from '../../orders/entities/order.entity';
 import { OrderMetadataEntity } from '../../orders/entities/order-metadata.entity';
+import { JwtService } from '@nestjs/jwt';
+
+import jwtDecode from 'jwt-decode';
+import { Response, Request } from 'express';
+import { Environment } from '../../environment';
+import { AppleTempUserEntity } from '../entities/apple-temp-user.entity';
 
 @Controller('customers')
 @CrudEntity(CustomerEntity)
@@ -54,6 +60,8 @@ export class CustomersController extends CrudController {
     protected readonly repositoryMetadata: Repository<CustomerMetadataEntity>,
     @InjectRepository(CustomerDeviceInfoEntity)
     protected readonly repositoryDeviceInfo: Repository<CustomerDeviceInfoEntity>,
+    @InjectRepository(AppleTempUserEntity)
+    protected readonly repositoryAppleTempUser: Repository<AppleTempUserEntity>,
     protected rolesAndPermissions: RolesAndPermissionsService,
     protected contentPermissionsHelper: ContentPermissionHelper,
     private usersService: UsersService,
@@ -62,6 +70,7 @@ export class CustomersController extends CrudController {
     private settingsService: SettingsService,
     private customersService: CustomersService,
     private httpService: HttpService,
+    private jwtService: JwtService,
   ) {
     super(rolesAndPermissions, contentPermissionsHelper);
   }
@@ -105,6 +114,27 @@ export class CustomersController extends CrudController {
   async countOrders(@User() user: UserEntity, @Query() query: any) {
     const builder = await this.getQueryBuilder(user, query);
     return builder.getCount();
+  }
+
+  @Get('test-apple-sign-in')
+  testAppleSignIn(
+    @Res() response: Response,
+  ) {
+    const cookieOptions: any = {
+      httpOnly: false,
+      path: '/',
+      domain: Environment.cookie.domain,
+      secure: Environment.cookie.secure,
+    };
+    // response.cookie(Environment.cookie.name,
+    //   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIzNTk1LCJ0b2tlbiI6' +
+    //   'ImJkMTAxM2VjMjkwY2Q0YzRjOGEwNGQ3YzVmMmM3MDI4NzNmZGMyMzc5ODg0YmQ3YjBjZ' +
+    //   'DViNDc0ZDE2ZWZhNjUiLCJpYXQiOjE2MDgxNzYxNjB9.8ZEAVO8rxJoE1cEIKK8Mp_qfxzCsgHq_L1qzUJn-CbE',
+    //   cookieOptions);
+    response.cookie('appleUser',
+      JSON.stringify({"login":"ijw2bc2ise_privaterelay.appleid.com@appleid.com","email":"ijw2bc2ise@privaterelay.appleid.com","firstName":"","lastName":"","password":"001744.7964c190e0e64b1ba97875f83bfe9411.1548","authorId":null,"moderatorId":null,"id":4,"isPublished":true,"createdAt":"2020-12-17T07:38:45.000Z","updatedAt":"2020-12-17T07:38:45.000Z"}),
+      cookieOptions);
+    response.redirect('http://localhost:8081/sign-up?destination=Checkout');
   }
 
   @Get('me')
@@ -163,6 +193,106 @@ export class CustomersController extends CrudController {
     }
   }
 
+  @Post('sign-in-with-apple')
+  async signInWithApple(
+    @Body() body: {
+      code: string;
+      state: string;
+      id_token: string;
+      user?: {
+        name: {
+          firstName: string;
+          lastName: string;
+        };
+        email: string;
+      };
+    },
+    @Res() response: Response,
+  ) {
+    const cookieOptions: any = {
+      httpOnly: false,
+      path: '/',
+      domain: Environment.cookie.domain,
+      secure: Environment.cookie.secure,
+    };
+    const redirectUrl = Buffer.from(body.state, 'base64').toString();
+    const tokenDecoded: {
+      iss: string;
+      aud: string;
+      exp: number;
+      iat: number;
+      sub: string;
+      c_hash: string;
+      email: string;
+      email_verified: boolean;
+      auth_time: number;
+      nonce_supported: boolean;
+    } = jwtDecode(body.id_token) as any;
+    let email = '';
+    let firstName = '';
+    let lastName = '';
+    const password = tokenDecoded.sub;
+    let login = tokenDecoded.email;
+    if (body.user) {
+      email = body.user.email;
+      if (body.user.name) {
+        firstName = body.user.name.firstName;
+        lastName = body.user.name.lastName;
+      }
+    }
+    if (!login.endsWith('@privaterelay.appleid.com')) {
+      email = login;
+      login = login
+          .replace('@', '_')
+        + '@privaterelay.appleid.com';
+    }
+    const existedActiveUser = await this.usersService
+      .getSingle({
+        username: login,
+        isActive: true,
+      });
+    if (existedActiveUser) {
+      // const authUser = await this.usersService.loginUserById(existedActiveUser.id);
+      const authUser = await this.usersService.loginUser(login, password);
+      response.cookie(Environment.cookie.name, authUser.authToken, cookieOptions);
+    } else {
+      const existedInactiveUser = await this.usersService
+        .getSingle({
+          username: login,
+          isActive: false,
+        });
+      if (existedInactiveUser) {
+        const customer = await this.repository.findOne({
+          userId: existedInactiveUser.id,
+        });
+        if (customer) {
+          email = customer.email;
+          firstName = customer.firstName;
+          lastName = customer.lastName;
+          await this.repository.remove(customer);
+        }
+        await this.usersService
+          .removeUser(existedInactiveUser.id);
+      }
+      let appleUser = await this.repositoryAppleTempUser
+        .findOne({ login });
+      if (!appleUser) {
+        appleUser = await this.repositoryAppleTempUser
+          .save(new AppleTempUserEntity({
+            login,
+            email,
+            firstName,
+            lastName,
+            password,
+          }));
+      }
+      const appleUserStr = JSON.stringify(appleUser);
+      response.cookie('appleUser', appleUserStr, cookieOptions);
+    }
+    response.redirect(redirectUrl);
+    return body;
+  }
+
   @Post('/sign-up')
   async createInactiveCustomer(@Body() customer: CustomerEntity, @User() user: UserEntity) {
     const isNewUser = !customer.user.id;
@@ -204,7 +334,7 @@ export class CustomersController extends CrudController {
         .createUser(customer.user);
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
-        // TODO i18n
+        // TODO i19n
         throw new UnprocessableEntityException('Email already exists');
       } else {
         throw new InternalServerErrorException(e.toString());
@@ -235,6 +365,13 @@ export class CustomersController extends CrudController {
       await this.repositoryDeviceInfo.save(deviceInfo);
     } catch (e) {
       throw new InternalServerErrorException(e.toString());
+    }
+    const appleUser = await this.repositoryAppleTempUser.findOne({
+      login: customer.user.username,
+    });
+    if (appleUser) {
+      await this.repositoryAppleTempUser
+        .remove(appleUser);
     }
     return { success: true };
   }
@@ -332,7 +469,9 @@ export class CustomersController extends CrudController {
       } else {
         throw new UnprocessableEntityException('Image format is wrong');
       }
-      const data = isJpeg ? logo.replace(jpegStartStr, '') : logo.replace(pngStartStr, '');
+      const data = isJpeg ?
+        logo.replace(jpegStartStr, '') :
+        logo.replace(pngStartStr, '');
       try {
         fs.readdirSync(path);
       } catch (e) {

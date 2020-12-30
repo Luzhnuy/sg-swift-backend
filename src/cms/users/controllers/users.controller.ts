@@ -108,7 +108,7 @@ export class UsersController {
       return await this.usersService.updateUser(user);
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
-        // TODO i18n
+        // TODO i19n
         throw new UnprocessableEntityException('Username is already exists');
       } else {
         throw new InternalServerErrorException();

@@ -94,4 +94,8 @@ export class PaymentsStripeService {
     return this.stripeClient.charges.create(data);
   }
 
+  checkCharge(chargeId: string) {
+    return this.stripeClient.charges.retrieve(chargeId);
+  }
+
 }

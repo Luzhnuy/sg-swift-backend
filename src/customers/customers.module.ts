@@ -13,6 +13,8 @@ import { CustomersModuleService } from './services/customers-module.service';
 import { MerchantsModule } from '../merchants/merchants.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { EmailDistributorModule } from '../email-distributor/email-distributor.module';
+import { JwtModule } from '@nestjs/jwt';
+import { AppleTempUserEntity } from './entities/apple-temp-user.entity';
 
 @Module({
   imports: [
@@ -21,7 +23,15 @@ import { EmailDistributorModule } from '../email-distributor/email-distributor.m
       CustomerEntity,
       CustomerMetadataEntity,
       CustomerDeviceInfoEntity,
+      AppleTempUserEntity,
     ]),
+    JwtModule.register({
+      // secret: 'fe9604e502a4fa7b0dd',
+      secret: '86D88Kf',
+      signOptions: {
+        // expiresIn: 3600,
+      },
+    }),
     EmailDistributorModule,
     HttpModule,
     SettingsModule,

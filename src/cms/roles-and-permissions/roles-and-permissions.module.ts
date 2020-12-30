@@ -9,14 +9,12 @@ import { ContentPermissionHelper } from './misc/content-permission-helper';
 import { RolesController } from './controllers/roles.controller';
 import { RolesAndPermissionsService } from './services/roles-and-permissions.service';
 import { RolesAndPermissionsController } from './controllers/roles-and-permissions.controller';
-import { I18nModule } from '../i18n/i18n.module';
 import { PermissionRoleService } from './services/permission-role.service';
 import { RolesAndPermissionsConfigService } from './services/roles-and-permissions-config.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([RoleEntity, PermissionEntity, PermissionRoleEntity]),
-    I18nModule,
   ],
   providers: [
     RolesService,

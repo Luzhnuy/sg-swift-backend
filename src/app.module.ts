@@ -25,6 +25,10 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { ApiV1Module } from './api-v1/api-v1.module';
 import { DbMigrationsModule } from './db-migrations/db-migrations.module';
 // import { DistancesController } from './geocoder/controllers/distances.controller';
+import { CollaborationRequestsModule } from './collaboration-requests/collaboration-requests.module';
+import { FavoritesModule } from './favorites/favorites.module';
+import { TranslationsModule } from './translations/translations.module';
+import { TranslationsModuleService } from './translations/services/translations-module.service';
 
 @Module({
   imports: [
@@ -70,6 +74,9 @@ import { DbMigrationsModule } from './db-migrations/db-migrations.module';
     SchedulerModule,
     ApiV1Module,
     DbMigrationsModule,
+    CollaborationRequestsModule,
+    FavoritesModule,
+    TranslationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

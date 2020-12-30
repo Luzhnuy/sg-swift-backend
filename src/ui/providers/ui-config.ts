@@ -19,6 +19,8 @@ export enum UIPermissionKeys {
   AllowZipcodesAccess = 'UIAllowZipcodesAccess',
   AllowZipcodesListsAccess = 'UIAllowZipcodesListsAccess',
   AllowFeedbackAccess = 'UIAllowFeedbackAccess',
+  AllowCollaborationRequestsAccess = 'UIAllowCollaborationRequestsAccess',
+  AllowTranslationsAccess = 'UIAllowTranslationsAccess',
 }
 
 @Injectable()
@@ -110,6 +112,16 @@ export class UiConfig {
     new PermissionEntity({
       key: UIPermissionKeys.AllowFeedbackAccess,
       description: 'View Review & Feedback section',
+      group: this.MODULE_GROUP,
+    }),
+    new PermissionEntity({
+      key: UIPermissionKeys.AllowCollaborationRequestsAccess,
+      description: 'View Collaboration Requests section',
+      group: this.MODULE_GROUP,
+    }),
+    new PermissionEntity({
+      key: UIPermissionKeys.AllowTranslationsAccess,
+      description: 'View Translations section',
       group: this.MODULE_GROUP,
     }),
   ];

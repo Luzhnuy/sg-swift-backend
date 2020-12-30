@@ -1,15 +1,20 @@
 export interface IEnvironment {
   mysql: {
-    database: string,
-    databaseOld: string,
-    username: string,
-    password: string,
-    type: 'mysql',
-    host: string,
-    port: number,
-    synchronize: boolean,
-    charset: string,
-    logging: boolean,
+    database: string;
+    databaseOld: string;
+    username: string;
+    password: string;
+    type: 'mysql';
+    host: string;
+    port: number;
+    synchronize: boolean;
+    charset: string;
+    logging: boolean;
+  };
+  cookie: {
+    name: string;
+    domain: string;
+    secure: boolean | 'auto';
   };
 }
 
@@ -25,5 +30,10 @@ export const Environment: IEnvironment = {
     synchronize: true,
     charset: 'utf8mb4_unicode_ci',
     logging: false,
+  },
+  cookie: {
+    name: 'auth-token',
+    domain: 'snapgrabdelivery.com',
+    secure: true,
   },
 };

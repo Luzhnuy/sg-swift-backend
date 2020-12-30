@@ -113,6 +113,15 @@ export class OrdersController extends CrudController {
       .sendNotificationToDrivers(order.id);
   }
 
+  @Get('test-charge-id/:id')
+  async testChargeId(
+    @Param('id') id: string,
+  ) {
+    const charge = await this.paymentsStripeService
+      .checkCharge(id);
+    return charge;
+  }
+
   @Get('')
   async loadContentEntities(@User() user: UserEntity, @Query() query: SearchQuery) {
     query.limit = query.limit || 100;
@@ -260,6 +269,7 @@ export class OrdersController extends CrudController {
   @Post('')
   @UseGuards(ContentPermissionsGuard(isOwner => ContentPermissionsKeys[ContentPermissionsKeys.ContentAdd]))
   async createContentEntity(@Body() entity: OrderEntity, @User() user: UserEntity) {
+    console.log('createContentEntity');
     switch (entity.type) {
       case OrderType.Booking:
       case OrderType.Trip:
@@ -278,7 +288,9 @@ export class OrdersController extends CrudController {
       await this.ordersService.assignMenuToItems(entity);
       this.ordersService.calcOrderItemsPrices(entity);
     }
+    console.log('before bookOrder');
     entity = await this.ordersService.bookOrder(entity);
+    console.log('after bookOrder');
     const customerPhoto = entity.metadata.customerPhoto;
     entity.metadata.customerPhoto = null;
     const order = await super.createContentEntity(entity, user) as OrderEntity;

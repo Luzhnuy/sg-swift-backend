@@ -105,7 +105,7 @@ export class UsersService {
       return delay
         .pipe(timeout(3100),
           map(() => {
-            // TODO i18n
+            // TODO i19n
             throw new UnprocessableEntityException(message);
           }),
         )
@@ -159,7 +159,7 @@ export class UsersService {
     return delay
       .pipe(timeout(3100),
         map(() => {
-          // TODO i18n
+          // TODO i19n
           throw new UnprocessableEntityException(message);
         }),
       )
@@ -336,7 +336,7 @@ export class UsersService {
       user = await this.usersRepository.save(tempUser);
       return user;
     } else {
-      // TODO i18n
+      // TODO i19n
       throw new UnprocessableEntityException('Current password is invalid');
     }
   }

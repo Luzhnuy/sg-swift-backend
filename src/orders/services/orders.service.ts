@@ -2,7 +2,7 @@ import { HttpService, Injectable, NotFoundException, UnprocessableEntityExceptio
 import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
-import { Subject } from 'rxjs';
+import { interval, Subject } from 'rxjs';
 import { DeliveryToOptions, OrderDeliveredToEntity } from '../entities/order-delivered-to.entity';
 import { OrderMetadataEntity, PaymentMethods } from '../entities/order-metadata.entity';
 import { InjectStripe } from 'nestjs-stripe';
@@ -26,6 +26,7 @@ import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.en
 import { MerchantsService } from '../../merchants/services/merchants.service';
 import { PriceCalculatorConstants } from '../entities/price-calculator-constant.entity';
 import { MenuItemEntity } from '../../merchants/entities/menu-item.entity';
+import { take, timeout } from 'rxjs/operators';
 
 @Injectable()
 export class OrdersService {
@@ -216,21 +217,32 @@ export class OrdersService {
   }
 
   public calcOrderItemsPrices(order: OrderEntity) {
+    let subtotal = 0;
     order
       .orderItems
       .forEach(oi => {
-        oi.price = oi.quantity * (
-          oi.menuItem.price
-          + oi.subOptions.reduce(
+        let price = oi.menuItem.price;
+        if (oi.subOptions) {
+          price += oi.subOptions.reduce(
             (sum, so) => sum + so.price,
             0,
-          ));
+          );
+        }
+        oi.price = oi.quantity * price;
+        subtotal += oi.price;
+        // oi.price = oi.quantity * (
+        //   oi.menuItem.price
+        //   + oi.subOptions.reduce(
+        //     (sum, so) => sum + so.price,
+        //     0,
+        //   ));
       });
-    order.metadata.subtotal = order.orderItems
-      .reduce(
-        (sum, oi) => sum + oi.price,
-        0,
-      );
+    order.metadata.subtotal = subtotal;
+    // order.metadata.subtotal = order.orderItems
+    //   .reduce(
+    //     (sum, oi) => sum + oi.price,
+    //     0,
+    //   );
   }
 
   public async updateOrderStatus(
@@ -265,7 +277,7 @@ export class OrdersService {
         if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
           try {
             if (order.type === OrderType.Booking) {
-              if (deliveryTo.option === DeliveryToOptions.Unavailable && !order.metadata.bringBack) {
+              if (!order.metadata.bringBack && deliveryTo && deliveryTo.option === DeliveryToOptions.Unavailable) {
                 if (order.metadata.bringBackOnUnavailable) {
                   order.metadata.bringBackOnUnavailable = true;
                   order.metadata.deliveryCharge += order.metadata.deliveryCharge * this.priceCalculatorService
@@ -290,7 +302,7 @@ export class OrdersService {
               await this.paymentsStripeService.chargeAmount(order.metadata.chargeId2, order.metadata.chargedAmount2 || order.metadata.chargedAmount);
             }
           } catch (e) {
-            // tslint:disable-next-line:no-console
+            console.log('some error happens');
             console.error(e);
           }
         } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
@@ -426,9 +438,30 @@ export class OrdersService {
         order.merchant.userId : order.customer.userId;
       order = await this.makeStripePayment(order, cardUserId);
     } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
+      // TODO check check if charge is really created
       order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
     } else if (order.metadata.paymentMethod === PaymentMethods.ApplePay) {
-      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      const chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      const charge = await this.paymentsStripeService
+        .checkCharge(order.metadata.chargeId);
+      console.log('charge :: ', charge, chargedAmount);
+      if (charge
+        && charge.id === order.metadata.chargeId
+        // && charge.amount === chargedAmount // TODO fix mobile apps
+        && charge.captured === false
+        && charge.paid === true
+        && charge.status === 'succeeded'
+      ) {
+        order.metadata.chargedAmount = chargedAmount;
+      } else {
+        await interval(3000)
+          .pipe(
+            timeout(3100),
+            take(1),
+          )
+          .toPromise();
+        throw new UnprocessableEntityException('Problems with charging');
+      }
     }
     return order;
   }

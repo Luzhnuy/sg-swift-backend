@@ -80,7 +80,7 @@ export class DriversController extends CrudController {
       }
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
-        // TODO i18n
+        // TODO i19n
         throw new UnprocessableEntityException('Email already exists');
       } else {
         throw new InternalServerErrorException(e.toString());

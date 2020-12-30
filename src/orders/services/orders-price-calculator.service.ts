@@ -229,7 +229,7 @@ export class OrdersPriceCalculatorService {
           .get({
             id: data.customerId,
           });
-        if (customer.metadata.credit >= 5) {
+        if (customer && customer.metadata.credit >= 5) {
           data.discount = -5;
         }
       }

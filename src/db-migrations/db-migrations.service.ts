@@ -137,7 +137,7 @@ export class DbMigrationsService {
         departments.reduce((res, department) => {
           if (zipcodesAssoc[department.zipcode]) {
             department.zipcodeEntityId = zipcodesAssoc[department.zipcode].id;
-            res.push(department)
+            res.push(department);
           } else {
             console.log('department zipcode not found :: ', department);
           }

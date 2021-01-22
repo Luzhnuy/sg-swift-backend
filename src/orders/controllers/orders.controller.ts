@@ -57,6 +57,7 @@ import { MenuSubOptionEntity } from '../../merchants/entities/menu-sub-option.en
 import { Response } from 'express';
 import { MerchantsRolesName } from '../../merchants/services/merchants-config.service';
 import { TestOrderEntity } from '../entities/test-order.entity';
+import { PaymentsPayPalService } from '../../payments/services/payments-pay-pal.service';
 
 interface SearchQuery {
   customerId?: string | number;
@@ -99,6 +100,7 @@ export class OrdersController extends CrudController {
     private reportsService: OrdersReportsService,
     private schedulerService: SchedulerService,
     private paymentsStripeService: PaymentsStripeService,
+    private paymentsPayPalService: PaymentsPayPalService,
   ) {
     super(rolesAndPermissions, contentPermissionsHelper);
   }
@@ -109,8 +111,8 @@ export class OrdersController extends CrudController {
       order: { id: 'DESC' },
     });
     return this.pushNotificationService
-      // .sendNotificationToCustomers(order);
-      .sendNotificationToDrivers(order.id);
+      .sendNotificationToCustomers(order);
+      // .sendNotificationToDrivers(order.id);
   }
 
   @Get('test-charge-id/:id')
@@ -269,7 +271,6 @@ export class OrdersController extends CrudController {
   @Post('')
   @UseGuards(ContentPermissionsGuard(isOwner => ContentPermissionsKeys[ContentPermissionsKeys.ContentAdd]))
   async createContentEntity(@Body() entity: OrderEntity, @User() user: UserEntity) {
-    console.log('createContentEntity');
     switch (entity.type) {
       case OrderType.Booking:
       case OrderType.Trip:
@@ -288,9 +289,7 @@ export class OrdersController extends CrudController {
       await this.ordersService.assignMenuToItems(entity);
       this.ordersService.calcOrderItemsPrices(entity);
     }
-    console.log('before bookOrder');
     entity = await this.ordersService.bookOrder(entity);
-    console.log('after bookOrder');
     const customerPhoto = entity.metadata.customerPhoto;
     entity.metadata.customerPhoto = null;
     const order = await super.createContentEntity(entity, user) as OrderEntity;

@@ -32,8 +32,8 @@ export const Environment: IEnvironment = {
     logging: false,
   },
   cookie: {
-    name: 'auth-token',
-    domain: 'snapgrabdelivery.com',
+    name: 'sgAuthToken',
+    domain: 'www.snapgrabdelivery.com',
     secure: true,
   },
 };

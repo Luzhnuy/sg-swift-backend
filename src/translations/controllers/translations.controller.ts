@@ -20,7 +20,7 @@ export class TranslationsController {
     const res = fs.readdirSync(this.path);
     const fileNames = res.reduce((result: string[], fullFileName) => {
       const fileName = fullFileName.slice(3);
-      if (result.indexOf(fileName) === -1) {
+      if (fileName.endsWith('.json') && result.indexOf(fileName) === -1) {
         result.push(fileName);
       }
       return result;

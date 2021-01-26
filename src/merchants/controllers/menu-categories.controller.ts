@@ -96,9 +96,16 @@ export class MenuCategoriesController extends CrudController {
 
   protected async getQueryBuilderLite(user, query) {
     delete query.hasCreditCard;
+    const loadEmpty = query.loadEmpty;
+    delete query.loadEmpty;
     const builder = await super.getQueryBuilder(user, query);
-    builder
-      .innerJoin('entity.items', 'items');
+    if (loadEmpty) {
+      builder
+        .leftJoin('entity.items', 'items');
+    } else {
+      builder
+        .innerJoin('entity.items', 'items');
+    }
     const secureWhere = await this.getWhereRestrictionsByPermissions(user);
     if (secureWhere && secureWhere.isPublished) {
       // builder.andWhere('items.isPublished = :isPublished', { isPublished: true });

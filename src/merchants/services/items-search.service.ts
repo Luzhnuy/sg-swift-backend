@@ -12,7 +12,7 @@ export class ItemsSearchService {
     private readonly elasticsearchService: ElasticsearchService,
   ) {}
 
-  public async searchMenuItem(query: string, merchantId?: string) {
+  public async searchMenuItem(query: string, merchantId: string = null, isPublished: boolean = true) {
     const queryParts = query
       .trim()
       .toLowerCase()
@@ -63,13 +63,14 @@ export class ItemsSearchService {
         );
       }
     });
-    const filterQuery: any = [
-      {
+    const filterQuery: any[] = [];
+    if (isPublished) {
+      filterQuery.push({
         term: {
-          isPublished: true,
+          isPublished,
         },
-      },
-    ];
+      });
+    }
     if (merchantId) {
       filterQuery.push({
         term: {

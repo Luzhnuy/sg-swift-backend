@@ -57,7 +57,9 @@ export class MenuItemsController extends CrudController {
     @Query() query,
   ) {
     if (query.query) {
-      const hits: any[] = await this.merchantsService.searchMenuItems(query.query, query.merchantId);
+      const secureWhere = await this.getWhereRestrictionsByPermissions(user);
+      const isPublished = !!(secureWhere && secureWhere.isPublished);
+      const hits: any[] = await this.merchantsService.searchMenuItems(query.query, query.merchantId, isPublished);
       if (hits.length === 0) {
         return [];
       }

@@ -26,6 +26,13 @@ export class CrudController {
     return builder.getMany();
   }
 
+  @Get('total')
+  async countContentEntities(@User() user: UserEntity, @Query() query) {
+    const builder = await this.getQueryBuilder(user, query);
+    const total = await builder.getCount();
+    return { total };
+  }
+
   @Get(':id')
   @UseGuards(ContentViewUnpublishedPermissionsGuard)
   @UseGuards(ContentPermissionsGuard(isOwner => {

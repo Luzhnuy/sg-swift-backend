@@ -28,9 +28,9 @@ export class MerchantsService {
       .removeAllMerchants();
   }
 
-  async searchMenuItems(query: string, merchantId?: string) {
+  async searchMenuItems(query: string, merchantId: string = null, isPublished = true) {
     return this.itemsSearchService
-      .searchMenuItem(query, merchantId);
+      .searchMenuItem(query, merchantId, isPublished);
   }
 
   async searchMerchants(query: string) {

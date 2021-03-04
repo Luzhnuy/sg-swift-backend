@@ -13,7 +13,6 @@ async function bootstrap() {
   app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
   app.use('//uploads', express.static(join(__dirname, '..', 'uploads')));
   app.use('///uploads', express.static(join(__dirname, '..', 'uploads')));
-  app.use('/locales', express.static(join(__dirname, '..', 'locales')));
   app.use(cookieParser());
   await app.listen(3000);
 }

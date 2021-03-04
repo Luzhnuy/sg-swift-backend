@@ -3,6 +3,7 @@ import { TranslationsController } from './controllers/translations.controller';
 import { TranslationsModuleService } from './services/translations-module.service';
 import { TranslationsConfig } from './providers/translations-config';
 import { CmsModule } from '../cms/cms.module';
+import { LocalesController } from './controllers/locales.controller';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { CmsModule } from '../cms/cms.module';
   ],
   controllers: [
     TranslationsController,
+    LocalesController,
   ],
   providers: [
     TranslationsConfig,

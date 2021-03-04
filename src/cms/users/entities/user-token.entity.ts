@@ -15,6 +15,9 @@ export class UserTokenEntity {
   @JoinColumn()
   user: UserEntity;
 
+  @Column()
+  userId: number;
+
   @Column('varchar', { length: 64 })
   token: string;
 

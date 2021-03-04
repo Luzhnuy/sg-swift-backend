@@ -1,5 +1,5 @@
 import { HttpService, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
 import { interval, Subject } from 'rxjs';
@@ -270,100 +270,18 @@ export class OrdersService {
     if (typeof cancellationReason !== 'undefined') {
       order.metadata.cancellationReason = cancellationReason;
     }
-    try {
-      if (
-        order.status === OrderStatus.Completed
-      ) {
-        if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
-          try {
-            if (order.type === OrderType.Booking) {
-              if (!order.metadata.bringBack && deliveryTo && deliveryTo.option === DeliveryToOptions.Unavailable) {
-                if (order.metadata.bringBackOnUnavailable) {
-                  order.metadata.bringBackOnUnavailable = true;
-                  order.metadata.deliveryCharge += order.metadata.deliveryCharge * this.priceCalculatorService
-                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
-                  order.metadata.serviceFee += order.metadata.serviceFee * this.priceCalculatorService
-                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
-                  order.metadata.tps += order.metadata.tps * this.priceCalculatorService
-                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
-                  order.metadata.tvq += order.metadata.tvq * this.priceCalculatorService
-                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
-                  order.metadata.totalAmount += order.metadata.totalAmount * this.priceCalculatorService
-                    .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
-                } else {
-                  order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
-                }
-              } else {
-                order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
-              }
-            }
-            await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, order.metadata.chargedAmount);
-            if (order.metadata.chargeId2) {
-              await this.paymentsStripeService.chargeAmount(order.metadata.chargeId2, order.metadata.chargedAmount2 || order.metadata.chargedAmount);
-            }
-          } catch (e) {
-            console.log('some error happens');
-            console.error(e);
-          }
-        } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
-          const chargeId = order.metadata.chargeId.split('-----')[1];
-          const total = (order.metadata.chargedAmount / 100).toFixed(2);
-          await this.paymentsPayPalService
-            .proceedCharge(chargeId, {
-              amount: {
-                currency: 'CAD',
-                total,
-              },
-              is_final_capture: true,
-            });
+    switch (order.status) {
+      case OrderStatus.Completed:
+        await this.handleStatusCompleted(order, deliveryTo);
+        break;
+      case OrderStatus.OnWay:
+        await this.handleStatusOnWay(order);
+        break;
+      case OrderStatus.Cancelled:
+        if (!skipRefundingOnCancel) {
+          await this.handleStatusCancelled(order, customerCancellation);
         }
-      } else if (
-        order.status === OrderStatus.OnWay
-        &&
-        order.type === OrderType.Custom
-      ) {
-        if (order.source === OrderSource.CustomerOld) {
-          await this.oldService.chargeCustomOrder(order);
-        } else {
-          await this.chargeCustomOrder(order);
-        }
-      } else if (
-        order.status === OrderStatus.Cancelled
-        &&
-        !skipRefundingOnCancel
-      ) {
-        if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
-          try {
-            if (customerCancellation) {
-              await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, 300);
-              order.metadata.chargedAmount = 300;
-            } else {
-              await this.stripeClient.refunds.create({ charge: order.metadata.chargeId });
-              if (order.metadata.chargeId2) {
-                await this.stripeClient.refunds.create({ charge: order.metadata.chargeId2 });
-              }
-              order.metadata.chargedAmount = 0;
-            }
-          } catch (e) {
-            // payment can be already refunded by customer app. It's correct behaviour
-            // console.error(e);
-          }
-        } else if (PaymentMethods.PayPal === order.metadata.paymentMethod) {
-          const chargeId = order.metadata.chargeId.split('-----')[1];
-          // order.metadata.chargedAmount = 0;
-          await this.paymentsPayPalService
-            .proceedCharge(chargeId, {
-              amount: {
-                currency: 'CAD',
-                total: '3.00',
-              },
-              is_final_capture: true,
-            });
-          order.metadata.chargedAmount = 300;
-        }
-      }
-    } catch (e) {
-      throw e;
+        break;
     }
     order = await this.repository.save(order);
     if (deliveryTo) {
@@ -393,6 +311,138 @@ export class OrdersService {
       },
     });
     return order;
+  }
+
+  private async chargePayPalPayment(order: OrderEntity, deliveryTo: OrderDeliveredToEntity) {
+    const chargeId = order.metadata.chargeId.split('-----')[1];
+    const total = (order.metadata.chargedAmount / 100).toFixed(2);
+    await this.paymentsPayPalService
+      .proceedCharge(chargeId, {
+        amount: {
+          currency: 'CAD',
+          total,
+        },
+        is_final_capture: true,
+      });
+  }
+
+  private async handleStatusCancelled(order: OrderEntity, customerCancellation: boolean) {
+    if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
+      try {
+        if (customerCancellation) {
+          await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, 300);
+          order.metadata.chargedAmount = 300;
+        } else {
+          await this.stripeClient.refunds.create({ charge: order.metadata.chargeId });
+          if (order.metadata.chargeId2) {
+            await this.stripeClient.refunds.create({ charge: order.metadata.chargeId2 });
+          }
+          order.metadata.chargedAmount = 0;
+        }
+      } catch (e) {
+        // payment can be already refunded by customer app. It's correct behaviour
+        // console.error(e);
+      }
+    } else if (PaymentMethods.PayPal === order.metadata.paymentMethod) {
+      const chargeId = order.metadata.chargeId.split('-----')[1];
+      // order.metadata.chargedAmount = 0;
+      await this.paymentsPayPalService
+        .proceedCharge(chargeId, {
+          amount: {
+            currency: 'CAD',
+            total: '3.00',
+          },
+          is_final_capture: true,
+        });
+      order.metadata.chargedAmount = 300;
+    }
+  }
+
+  private async handleStatusOnWay(order: OrderEntity) {
+    if (order.type === OrderType.Custom) {
+      if (order.source === OrderSource.CustomerOld) {
+        await this.oldService.chargeCustomOrder(order);
+      } else {
+        await this.chargeCustomOrder(order);
+      }
+    }
+  }
+
+  private async handleStatusCompleted(order: OrderEntity, deliveryTo: OrderDeliveredToEntity) {
+    switch (order.type) {
+      case OrderType.Trip:
+        const uncompletedCount = await this.repository
+          .createQueryBuilder('order')
+          .innerJoin('order.metadata', 'metadata')
+          .andWhere('metadata.tripUuid = :tripUuid', order.metadata)
+          .andWhere('order.id != :id', order)
+          .andWhere(`order.status NOT IN(:...statuses)`, { statuses: [ OrderStatus.Completed, OrderStatus.Cancelled ]})
+          .getCount();
+        if (uncompletedCount === 0) {
+          await this.chargeTripOrder(order);
+        }
+        break;
+      default:
+        if ([PaymentMethods.Stripe, PaymentMethods.ApplePay].indexOf(order.metadata.paymentMethod) > -1) {
+          await this.chargeStripPayment(order, deliveryTo);
+        } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
+          await this.chargePayPalPayment(order, deliveryTo);
+        }
+        break;
+    }
+  }
+
+  private async chargeTripOrder(order: OrderEntity) {
+    const tripOrders = await this.repository
+      .createQueryBuilder('order')
+      .innerJoinAndSelect('order.metadata', 'metadata')
+      .andWhere('metadata.tripUuid = :tripUuid', order.metadata)
+      .andWhere(`order.status != :status`, { status: OrderStatus.Cancelled })
+      .getMany();
+    const chargedAmountTotal = tripOrders.reduce((res, o) => res + o.metadata.chargedAmount, 0);
+    try {
+      await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, order.metadata.chargedAmount);
+    } catch (e) {
+      console.log('Stripe Error:', 'orderId = ', order.id, new Date());
+      console.error(e);
+    }
+  }
+
+  private async chargeStripPayment(order: OrderEntity, deliveryTo: OrderDeliveredToEntity) {
+    if (order.type === OrderType.Booking) {
+      this.updateBookingOrderOnBringBackAndUnavailable(order, deliveryTo);
+    }
+    try {
+      await this.paymentsStripeService.chargeAmount(order.metadata.chargeId, order.metadata.chargedAmount);
+      if (order.metadata.chargeId2) {
+        await this.paymentsStripeService.chargeAmount(order.metadata.chargeId2, order.metadata.chargedAmount2 || order.metadata.chargedAmount);
+      }
+    } catch (e) {
+      console.log('Stripe Error:', 'orderId = ', order.id, new Date());
+      console.error(e);
+    }
+  }
+
+  private updateBookingOrderOnBringBackAndUnavailable(order: OrderEntity, deliveryTo: OrderDeliveredToEntity) {
+    if (!order.metadata.bringBack && deliveryTo && deliveryTo.option === DeliveryToOptions.Unavailable) {
+      if (order.metadata.bringBackOnUnavailable) {
+        order.metadata.bringBackOnUnavailable = true;
+        order.metadata.deliveryCharge += order.metadata.deliveryCharge * this.priceCalculatorService
+          .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+        order.metadata.serviceFee += order.metadata.serviceFee * this.priceCalculatorService
+          .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+        order.metadata.tps += order.metadata.tps * this.priceCalculatorService
+          .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+        order.metadata.tvq += order.metadata.tvq * this.priceCalculatorService
+          .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+        order.metadata.totalAmount += order.metadata.totalAmount * this.priceCalculatorService
+          .getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef);
+      } else {
+        order.metadata.chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
+      }
+    } else {
+      order.metadata.chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
+    }
   }
 
   public async emitOrderUpdate(event: {
@@ -439,12 +489,11 @@ export class OrdersService {
       order = await this.makeStripePayment(order, cardUserId);
     } else if (order.metadata.paymentMethod === PaymentMethods.PayPal) {
       // TODO check check if charge is really created
-      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      order.metadata.chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
     } else if (order.metadata.paymentMethod === PaymentMethods.ApplePay) {
-      const chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      const chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
       const charge = await this.paymentsStripeService
         .checkCharge(order.metadata.chargeId);
-      console.log('charge :: ', charge, chargedAmount);
       if (charge
         && charge.id === order.metadata.chargeId
         // && charge.amount === chargedAmount // TODO fix mobile apps
@@ -511,7 +560,7 @@ export class OrdersService {
   public async payExtraTipStripe(order: OrderEntity, amount: number, card: PaymentCardEntity) {
     return this.paymentsStripeService.makePayment(
       card.customerId,
-      Math.round(amount),
+      this.roundTotalAmount(amount / 100),
       true,
       `Tip for oder #${order.id}`,
     );
@@ -552,7 +601,7 @@ export class OrdersService {
   private async chargeCustomOrder(order: OrderEntity) {
     await this.prepareForCharge(order);
     let res;
-    const desiredChargedAmount = Math.round(order.metadata.totalAmount * 100);
+    const desiredChargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
     if (desiredChargedAmount > 5000) {
       let card;
       if (order.customer) {
@@ -593,18 +642,16 @@ export class OrdersService {
       chargedAmount = 5000;
     } else if (order.type === OrderType.Booking) {
       if (order.metadata.bringBackOnUnavailable && !order.metadata.bringBack) {
-        chargedAmount = Math.round(
-          (
+        chargedAmount = this.roundTotalAmount(
             order.metadata.totalAmount
             + order.metadata.totalAmount
-            * this.priceCalculatorService.getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef)
-          ) * 100,
+            * this.priceCalculatorService.getConstant(PriceCalculatorConstants.BookingBringBackFareOnUnavailableKoef),
         );
       } else {
-        chargedAmount = Math.round(order.metadata.totalAmount * 100);
+        chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
       }
     } else {
-      chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
     }
     const res = await this.paymentsStripeService.makePayment(
       card.customerId,
@@ -628,7 +675,7 @@ export class OrdersService {
       if (i === 0) {
         merchantName = order.merchant.name;
       }
-      return sum + Math.round(order.metadata.totalAmount * 100);
+      return sum + this.roundTotalAmount(order.metadata.totalAmount);
     }, 0);
     const res = await this.paymentsStripeService.makePayment(
       card.customerId,
@@ -637,11 +684,15 @@ export class OrdersService {
       `Trip order for ${merchantName}`,
     );
     orders.forEach(order => {
-      order.metadata.chargedAmount = Math.round(order.metadata.totalAmount * 100);
+      order.metadata.chargedAmount = this.roundTotalAmount(order.metadata.totalAmount);
       order.metadata.chargeId = res.id;
       order.metadata.lastFour = card.last4;
     });
     return orders;
+  }
+
+  private roundTotalAmount(totalAmount) {
+    return Math.round(totalAmount * 100);
   }
 
   private async addDebt(order: OrderEntity, deptAmount: number) {

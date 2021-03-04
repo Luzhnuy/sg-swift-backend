@@ -91,7 +91,8 @@ export class MerchantsSearchService {
       const doc: RequestParams.Index<Partial<MerchantEntity>> = {
         id: merchant.id.toString(),
         index: this.MerchantIndex,
-        refresh: 'false',
+        // refresh: 'false',
+        refresh: false,
         body: {
           id: merchant.id,
           isPublished: this.isMerchantPublished(merchant),

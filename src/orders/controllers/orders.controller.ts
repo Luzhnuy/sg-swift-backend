@@ -10,7 +10,8 @@ import {
   Param,
   Post,
   Put,
-  Query, Res,
+  Query,
+  Res,
   UnauthorizedException,
   UnprocessableEntityException,
   UseGuards,
@@ -18,7 +19,10 @@ import {
 import { CrudController } from '../../cms/content/controllers/crud-controller';
 import { Brackets, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { RolesAndPermissionsService } from '../../cms/roles-and-permissions/services/roles-and-permissions.service';
-import { ContentPermissionHelper, ContentPermissionsKeys } from '../../cms/roles-and-permissions/misc/content-permission-helper';
+import {
+  ContentPermissionHelper,
+  ContentPermissionsKeys,
+} from '../../cms/roles-and-permissions/misc/content-permission-helper';
 import { CrudEntity } from '../../cms/content/decorators/crud-controller.decorator';
 import { OrderEntity, OrderSource, OrderStatus, OrderType } from '../entities/order.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -363,10 +367,13 @@ export class OrdersController extends CrudController {
   @Post('trip')
   @UseGuards(ContentPermissionsGuard(isOwner => ContentPermissionsKeys[ContentPermissionsKeys.ContentAdd]))
   async createContentEntityTrip(@Body() entities: OrderEntity[], @User() user: UserEntity) {
-    const tripUuid = Math.random()
+    const ts = Math.round((new Date()).getTime() / 10000000) // about 2.8 of hour
+      .toString();
+    const randPart = Math.random()
       .toString(36)
       .replace(/[^a-z]+/g, '')
-      .substr(0, 10);
+      .substr(0, 10 - ts.length);
+    const tripUuid = ts + randPart;
     // tslint:disable-next-line:forin
     for (const i in entities) {
       const entity = entities[i];
@@ -380,13 +387,13 @@ export class OrdersController extends CrudController {
       const entity = entities[i];
       const order = await super.createContentEntity(entity, user) as OrderEntity;
       orders.push(order);
-      this.emailSenderService
-        .sendConfirmationEmail(order);
       this.ordersService.emitOrderUpdate({
         eventName: 'created',
         updateData: order,
       });
     }
+    this.emailSenderService
+      .sendConfirmationEmail(orders);
     return orders;
   }
 
@@ -481,12 +488,9 @@ export class OrdersController extends CrudController {
         source?: OrderSource,
       },
   ) {
-    const jpegStartStr = 'data:image/jpeg;base64,';
-    const pngStartStr = 'data:image/png;base64,';
-    try {
-      if (status === OrderStatus.Accepted) {
-        if (order.status === OrderStatus.Received) {
-          // const driver = this.driversService;
+    switch (status) {
+      case OrderStatus.Accepted:
+        if (order.status === OrderStatus.Received) { // Previous status
           const driver: DriverProfileEntity = await this.driversService.getSingle(driverProfileId);
           if (driver.maxSimultaneousDelivery) {
             const activeOrderCount = await this.ordersService.countActiveOrderByDriverId(driverProfileId);
@@ -498,8 +502,11 @@ export class OrdersController extends CrudController {
         } else {
           throw new ConflictException('Order is no longer available.');
         }
-      } else if (status === OrderStatus.OnWay) {
+        break;
+      case OrderStatus.OnWay:
         if (photo) {
+          const jpegStartStr = 'data:image/jpeg;base64,';
+          const pngStartStr = 'data:image/png;base64,';
           const isJpeg = photo.startsWith(jpegStartStr);
           const isPng = photo.startsWith(pngStartStr);
           const path = 'uploads/custom-order/driver';
@@ -527,7 +534,8 @@ export class OrdersController extends CrudController {
           undefined,
           undefined,
           customAmount);
-      } else if (status === OrderStatus.Completed) {
+        break;
+      case OrderStatus.Completed:
         if (deliveredTo) {
           deliveredTo.author = user;
           deliveredTo.moderator = user;
@@ -540,7 +548,7 @@ export class OrdersController extends CrudController {
             switch (retOrder.type) {
               case OrderType.Booking:
               case OrderType.Trip:
-                await this.emailSenderService.sendReceiptBooking(retOrder);
+                await this.sendReceiptBookingTrip(retOrder);
                 break;
               case OrderType.Custom:
               case OrderType.Menu:
@@ -548,13 +556,15 @@ export class OrdersController extends CrudController {
                 break;
             }
           } catch (e) {
+            // tslint:disable-next-line:no-console
             console.log(e);
           }
           return retOrder;
         } catch (e) {
           throw new UnprocessableEntityException(e.toString());
         }
-      } else if (status === OrderStatus.Cancelled) {
+        break;
+      case OrderStatus.Cancelled:
         try {
           if (order.type === OrderType.Menu) {
             const subOptionsIds = order.orderItems
@@ -583,6 +593,7 @@ export class OrdersController extends CrudController {
           await this.emailSenderService
             .sendCancelOrderEmail(order);
         } catch (e) {
+          // tslint:disable-next-line:no-console
           console.log(e);
         }
         let refundCancellationFee = false;
@@ -598,12 +609,10 @@ export class OrdersController extends CrudController {
           undefined, undefined, undefined,
           cancellationReason, false,
           refundCancellationFee);
-      } else if (status === OrderStatus.Received) {
+        break;
+      default:
         this.ordersService.updateOrderStatus(order, status, driverProfileId);
-      }
-    } catch (e) {
-      console.error(e);
-      throw e;
+        break;
     }
   }
 
@@ -972,8 +981,7 @@ export class OrdersController extends CrudController {
       switch (order.type) {
         case OrderType.Booking:
         case OrderType.Trip:
-          await this.emailSenderService
-            .sendReceiptBooking(order);
+          await this.sendReceiptBookingTrip(order);
           break;
         default:
           await this.emailSenderService
@@ -994,8 +1002,7 @@ export class OrdersController extends CrudController {
       switch (order.type) {
         case OrderType.Booking:
         case OrderType.Trip:
-          await this.emailSenderService
-            .sendReceiptBooking(order);
+          await this.sendReceiptBookingTrip(order);
           break;
         default:
           await this.emailSenderService
@@ -1142,5 +1149,30 @@ export class OrdersController extends CrudController {
       const filePath = `${path}/${fileName}`;
       fs.writeFileSync(filePath, photoData, 'base64');
       return `/${filePath}`;
+  }
+
+  private async sendReceiptBookingTrip(order: OrderEntity) {
+    if (order.type === OrderType.Trip) {
+      const uncompletedCount = await this.repository
+        .createQueryBuilder('order')
+        .innerJoin('order.metadata', 'metadata')
+        .andWhere('metadata.tripUuid = :tripUuid', order.metadata)
+        .andWhere(`order.status NOT IN(:...statuses)`, { statuses: [ OrderStatus.Completed, OrderStatus.Cancelled ]})
+        .getCount();
+      if (uncompletedCount === 0) {
+        const orders = await this.repository
+          .createQueryBuilder('order')
+          .innerJoinAndSelect('order.metadata', 'metadata')
+          .innerJoinAndSelect('order.merchant', 'merchant')
+          .andWhere('metadata.tripUuid = :tripUuid', order.metadata)
+          .andWhere(`order.status = :status`, { status: OrderStatus.Completed })
+          .getMany();
+        await this.emailSenderService
+          .sendReceiptTrip(orders);
+      }
+    } else {
+      await this.emailSenderService
+        .sendReceiptBooking(order);
+    }
   }
 }

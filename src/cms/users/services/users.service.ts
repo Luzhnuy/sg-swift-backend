@@ -36,20 +36,20 @@ export class UsersService {
       .$initComplete
       .subscribe(async (complete) => {
         // TODO this functionality works wrong. Event trigger several times (for each config). See $initComplete implementation
-        if (complete) {
-          const adminRole = await this.rolesAndPermissions.findRoleByName(RolesAndPermissionsRolesName.Admin);
-          const adminUser = new UserEntity({
-            username: 'admin',
-            password: 'admin',
-            isDefault: true,
-            roles: [ adminRole ],
-          });
-          try {
-            await this.createUser(adminUser, true);
-          } catch (e) {
-            // user exists
-          }
-        }
+        // if (complete) {
+        //   const adminRole = await this.rolesAndPermissions.findRoleByName(RolesAndPermissionsRolesName.Admin);
+        //   const adminUser = new UserEntity({
+        //     username: 'admin',
+        //     password: 'admin',
+        //     isDefault: true,
+        //     roles: [ adminRole ],
+        //   });
+        //   try {
+        //     await this.createUser(adminUser, true);
+        //   } catch (e) {
+        //     // user exists
+        //   }
+        // }
       });
   }
 

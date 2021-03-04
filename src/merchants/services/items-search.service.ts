@@ -102,7 +102,8 @@ export class ItemsSearchService {
       const doc: RequestParams.Index<Partial<MenuItemEntity>> = {
         id: item.id.toString(),
         index: this.MenuItemIndex,
-        refresh: 'false',
+        // refresh: 'false',
+        refresh: false,
         body: {
           id: item.id,
           isPublished: this.isMenuItemPublished(item),

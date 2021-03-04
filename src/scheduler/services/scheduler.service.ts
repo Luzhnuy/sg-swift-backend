@@ -6,7 +6,9 @@ import { Observable, Subject } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import * as dateFormat from 'dateformat';
 
-export const LessThanOrEqualDate = (date: Date) => LessThanOrEqual(dateFormat(date, 'isoDateTime'));
+export const LessThanOrEqualDate = (date: Date) => LessThanOrEqual(
+  dateFormat(date, 'yyyy-mm-dd HH:MM:ss'),
+);
 
 @Injectable()
 export class SchedulerService {

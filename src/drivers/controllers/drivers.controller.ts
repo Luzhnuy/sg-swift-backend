@@ -221,9 +221,13 @@ export class DriversController extends CrudController {
   }
 
   protected async getQueryBuilder(user: UserEntity, query: any) {
+    const { limit, page } = query;
     const builder = await super.getQueryBuilder(user, query);
     builder.leftJoinAndSelect('entity.status', 'status');
     builder.leftJoinAndSelect('entity.user', 'user');
+    if (!limit && !page) {
+      builder.take(250);
+    }
     return builder;
   }
 

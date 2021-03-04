@@ -35,8 +35,7 @@ import { SmsActivationService } from '../../sms-activation/services/sms-activati
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { SettingsService } from '../../settings/services/settings.service';
 import { EmailSenderService } from '../../email-distributor/services/email-sender.service';
-import * as time from 'time';
-import { OrderEntity } from '../../orders/entities/order.entity';
+import * as moment from 'moment-timezone';
 import { MerchantsSearchService } from '../services/merchants-search.service';
 import { MenuItemEntity } from '../entities/menu-item.entity';
 import { ZipcodesService } from '../../geocoder/services/zipcodes.service';
@@ -117,14 +116,7 @@ export class MerchantsController extends CrudController {
       const merchant = merchantsAssoc[merchantId];
       merchantsResultList.push(merchant);
     });
-    const date = new time.Date();
-    return merchantsResultList.map(
-      merchant => {
-        date.setTimezone(merchant.departments[0].timezone);
-        merchant.departments[0].timezoneOffset = -date.getTimezoneOffset();
-        return merchant;
-      },
-    );
+    return this.applyTimezoneOffset(merchantsResultList);
   }
 
   @Get('test-recipient')
@@ -138,16 +130,8 @@ export class MerchantsController extends CrudController {
   @SanitizeUsers('user')
   async loadContentEntities(@User() user: UserEntity, @Query() query) {
     const builder = await this.getQueryBuilder(user, query);
-    const date = new time.Date();
-    const merchants = await builder.getMany();
-    return (merchants as MerchantEntity[]).map(
-      merchant => {
-        date.setTimezone(merchant.departments[0].timezone);
-        merchant.departments[0].timezoneOffset = -date.getTimezoneOffset();
-        return merchant;
-      },
-    );
-    // return merchants;
+    const merchants = await builder.getMany() as MerchantEntity[];
+    return this.applyTimezoneOffset(merchants);
   }
 
   @Get('count')
@@ -190,10 +174,7 @@ export class MerchantsController extends CrudController {
   @UseGuards(ContentEntityNotFoundGuard)
   @SanitizeUser('user')
   async loadMerchant(@ContentEntityParam() entity: MerchantEntity, @User() user: UserEntity) {
-    const date = new time.Date();
-    date.setTimezone(entity.departments[0].timezone);
-    entity.departments[0].timezoneOffset = -date.getTimezoneOffset();
-    return entity;
+    return this.applyTimezoneOffset([entity])[0];
   }
 
   @Post('/sign-up')
@@ -597,5 +578,15 @@ export class MerchantsController extends CrudController {
         }));
     }
     return builder;
+  }
+
+  private applyTimezoneOffset(merchants: MerchantEntity[]) {
+    return merchants.map(
+      merchant => {
+        merchant.departments[0].timezoneOffset =
+          parseInt(moment().tz(merchant.departments[0].timezone).format('Z'), 10) * 60;
+        return merchant;
+      },
+    );
   }
 }

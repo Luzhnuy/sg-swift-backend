@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '../../settings/services/settings.service';
-import { createClient, GeocodingResult, GoogleMapsClient, LatLngLiteral, PlaceDetailsResult } from '@google/maps';
+import {
+  AddressComponent,
+  createClient,
+  GeocodingResult,
+  GoogleMapsClient,
+  GoogleMapsClientWithPromise,
+  LatLngLiteral,
+  PlaceDetailsResult,
+} from '@google/maps';
 import { SettingsVariablesKeys } from '../../settings/providers/settings-config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MapDistanceEntity } from '../entities/map-distance.entity';
@@ -10,7 +18,8 @@ import { MerchantsZipcodeEntity } from '../entities/merchants-zipcode.entity';
 @Injectable()
 export class GeocoderService {
 
-  private client: GoogleMapsClient;
+  // private client: GoogleMapsClient;
+  private client: GoogleMapsClientWithPromise;
 
   constructor(
     @InjectRepository(MapDistanceEntity)
@@ -92,14 +101,14 @@ export class GeocoderService {
 
   async getAutocompleteByCRZ(country: string, region: string, zipcode: string) {
     const address = await this.getAddress(`${region} ${zipcode}, ${country}`);
-    // const address = await this.getAddress(`QC H3P, Canada`);
     return address;
   }
 
   getZipcode(addr: PlaceDetailsResult | GeocodingResult): string {
-    const zipcodeCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('postal_code') > -1;
-    });
+    const zipcodeCmp = (addr.address_components as Array<AddressComponent<'postal_code'>>)
+      .find(ac => {
+        return ac.types.indexOf('postal_code') > -1;
+      });
     if (zipcodeCmp) {
       return zipcodeCmp.short_name.toUpperCase();
     }
@@ -112,9 +121,10 @@ export class GeocoderService {
   }
 
   getCountryCode(addr: PlaceDetailsResult | GeocodingResult): string {
-    const countryCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('country') > -1;
-    });
+    const countryCmp = (addr.address_components as Array<AddressComponent<'country'>>)
+      .find((ac: any) => {
+        return ac.types.indexOf('country') > -1;
+      });
     if (countryCmp) {
       return countryCmp.short_name.toUpperCase();
     }
@@ -122,9 +132,10 @@ export class GeocoderService {
   }
 
   getCountry(addr: PlaceDetailsResult | GeocodingResult): string {
-    const countryCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('country') > -1;
-    });
+    const countryCmp = (addr.address_components as Array<AddressComponent<'country'>>)
+      .find(ac => {
+        return ac.types.indexOf('country') > -1;
+      });
     if (countryCmp) {
       return countryCmp.long_name;
     }
@@ -132,9 +143,10 @@ export class GeocoderService {
   }
 
   getCity(addr: PlaceDetailsResult | GeocodingResult): string {
-    const countryCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('locality') > -1;
-    });
+    const countryCmp = (addr.address_components as Array<AddressComponent<'locality'>>)
+      .find(ac => {
+        return ac.types.indexOf('locality') > -1;
+      });
     if (countryCmp) {
       return countryCmp.long_name;
     }
@@ -142,9 +154,10 @@ export class GeocoderService {
   }
 
   getRegion(addr: PlaceDetailsResult | GeocodingResult): string {
-    const countryCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('administrative_area_level_1') > -1;
-    });
+    const countryCmp = (addr.address_components as Array<AddressComponent<'administrative_area_level_1'>>)
+      .find(ac => {
+        return ac.types.indexOf('administrative_area_level_1') > -1;
+      });
     if (countryCmp) {
       return countryCmp.short_name.toUpperCase();
     }
@@ -152,9 +165,10 @@ export class GeocoderService {
   }
 
   getStreet(addr: PlaceDetailsResult | GeocodingResult): string {
-    const countryCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('route') > -1;
-    });
+    const countryCmp = (addr.address_components as Array<AddressComponent<'route'>>)
+      .find(ac => {
+        return ac.types.indexOf('route') > -1;
+      });
     if (countryCmp) {
       return countryCmp.short_name.toUpperCase();
     }
@@ -162,9 +176,10 @@ export class GeocoderService {
   }
 
   getStreetNumber(addr: PlaceDetailsResult | GeocodingResult): string {
-    const countryCmp = addr.address_components.find(ac => {
-      return ac.types.indexOf('street_number') > -1;
-    });
+    const countryCmp = (addr.address_components as Array<AddressComponent<'street_number'>>)
+      .find(ac => {
+        return ac.types.indexOf('street_number') > -1;
+      });
     if (countryCmp) {
       return countryCmp.short_name.toUpperCase();
     }

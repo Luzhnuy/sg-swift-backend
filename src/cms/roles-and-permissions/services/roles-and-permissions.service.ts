@@ -73,6 +73,7 @@ export class RolesAndPermissionsService {
     return $registered.asObservable();
   }
 
+  // tslint:disable-next-line:ban-types
   public async registerEntityPermissions(entity: Function, group: string = null, createRoleAssoc = true) {
     const permissions = this.contentPermissionHelper.getContentPermissions(entity, group);
     return await this.registerPermissions(permissions, createRoleAssoc).toPromise();

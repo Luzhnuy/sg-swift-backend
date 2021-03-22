@@ -45,10 +45,13 @@ export class MenuItemEntity extends ContentEntity {
   @Column('text')
   description: string;
 
+  @Column('varchar', { length: 255, nullable: true })
+  squareId: string;
+
   @Column('decimal', {  precision: 8, scale: 2, default: null, nullable: true, transformer: ColumnNumericTransformer })
   price: number;
 
-  @Column('varchar', { length: 64, nullable: true, default: null })
+  @Column('varchar', { length: 255, nullable: true, default: null })
   image: string;
 
   @Column('boolean', { default: false })

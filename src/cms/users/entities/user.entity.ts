@@ -56,6 +56,9 @@ export class UserEntity {
   @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
   updatedAt: Date;
 
+  @Column('varchar', { length: 255, nullable: true, default: null })
+  squareApiToken: string;
+
   // @Column(type => UserEntity, { default: null, nullable: true })
   // delegator: UserEntity;
   @ManyToOne(type => UserEntity, {
